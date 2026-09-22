@@ -12,7 +12,7 @@
   <url>https://github.com/trestack/queryfence</url>
   <inceptionYear>2026</inceptionYear>
 
-  <!-- ===== Metadata bắt buộc cho Maven Central ===== -->
+  <!-- ===== Metadata required by Maven Central ===== -->
   <licenses>
     <license>
       <name>Apache License, Version 2.0</name>
@@ -51,7 +51,7 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 
-    <!-- Dependencies (Dependabot sẽ tự đề xuất nâng version) -->
+    <!-- Dependencies (Dependabot proposes version bumps automatically) -->
     <jsqlparser.version>5.3</jsqlparser.version>
     <datasource-proxy.version>1.11.0</datasource-proxy.version>
     <snakeyaml.version>2.4</snakeyaml.version>
@@ -132,7 +132,7 @@
     </pluginManagement>
 
     <plugins>
-      <!-- Chặn build nếu dùng Java/Maven quá cũ -->
+      <!-- Fail the build on Java/Maven versions that are too old -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-enforcer-plugin</artifactId>
@@ -158,7 +158,7 @@
         </executions>
       </plugin>
 
-      <!-- Format code thống nhất. Sửa tự động: ./mvnw spotless:apply -->
+      <!-- Consistent code formatting. Auto-fix: ./mvnw spotless:apply -->
       <plugin>
         <groupId>com.diffplug.spotless</groupId>
         <artifactId>spotless-maven-plugin</artifactId>
@@ -189,7 +189,7 @@
         </executions>
       </plugin>
 
-      <!-- Đo coverage -->
+      <!-- Code coverage -->
       <plugin>
         <groupId>org.jacoco</groupId>
         <artifactId>jacoco-maven-plugin</artifactId>
@@ -228,7 +228,7 @@
         <spotless.check.skip>true</spotless.check.skip>
       </properties>
     </profile>
-    <!-- Chỉ bật khi release: ./mvnw -Prelease deploy -->
+    <!-- Enabled only for releases: ./mvnw -Prelease deploy -->
     <profile>
       <id>release</id>
       <build>

@@ -1,12 +1,12 @@
 name: Release
 
-# Chạy khi bạn đẩy một tag dạng v0.1.0
+# Runs when a tag like v0.1.0 is pushed
 on:
   push:
     tags: ['v*']
 
 permissions:
-  contents: write   # để tạo GitHub Release
+  contents: write   # to create the GitHub Release
 
 jobs:
   release:
@@ -19,11 +19,11 @@ jobs:
           distribution: temurin
           java-version: 21
           cache: maven
-          # Tạo settings.xml với server "central" khớp publishingServerId trong pom
+          # Generate settings.xml with a "central" server matching publishingServerId in the pom
           server-id: central
           server-username: CENTRAL_USERNAME
           server-password: CENTRAL_PASSWORD
-          # Nạp khóa GPG vào máy CI
+          # Import the GPG key into the CI runner
           gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
           gpg-passphrase: MAVEN_GPG_PASSPHRASE
 
