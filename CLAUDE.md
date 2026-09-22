@@ -117,6 +117,20 @@ parameter value checks, custom rule DSL, UI.
 - Update `CHANGELOG.md` under `[Unreleased]` for user-visible changes.
 - Keep versions in the parent `pom.xml` `<properties>`.
 
+### Workflow
+
+- `main` is protected by a ruleset: changes land only through pull requests, and the
+  `Build (JDK 17)`, `Build (JDK 21)` and `Build (JDK 25)` checks must pass on a branch that is
+  up to date with `main`. Force-push and branch deletion are blocked.
+- Never commit or push directly to `main`. Work on a branch named by change type:
+  `feat/...`, `fix/...`, `docs/...`, `test/...`, `chore/...`.
+- Open a pull request whose description states **what** changed and **why**, plus anything the
+  maintainer should review closely (decisions taken, open questions).
+- Wait for CI to be green on the PR. **Never merge**, enable auto-merge or approve on the
+  maintainer's behalf: the maintainer reads and merges every PR.
+- No AI attribution trailers (`Co-Authored-By: Claude`, "Generated with Claude Code") in commits
+  or PR descriptions.
+
 ## Security — never do these
 
 - Never read, print, create or commit GPG keys, passphrases, Central Portal tokens or any
