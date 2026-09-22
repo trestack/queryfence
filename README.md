@@ -89,19 +89,25 @@ See [docs/DESIGN.md](docs/DESIGN.md) for the exact rule semantics and the known 
 
 > Not on Maven Central yet. Until 0.1.0 is released, build it locally with `./mvnw install`.
 
+For a Spring Boot application:
+
 ```xml
 <dependency>
   <groupId>io.github.trestack</groupId>
-  <artifactId>queryfence-junit5</artifactId>
+  <artifactId>queryfence-spring-test</artifactId>
   <version>0.1.0-SNAPSHOT</version>
   <scope>test</scope>
 </dependency>
 ```
 
+Without Spring, use `queryfence-junit5` instead (see [Plain JDBC](#plain-jdbc)).
 If you use several QueryFence modules, import `io.github.trestack:queryfence-bom` in
 `<dependencyManagement>` to keep their versions aligned.
 
-## Quickstart
+## Quickstart (Spring Boot)
+
+Two steps: add the dependency above, and declare a policy. There is no annotation to add and no
+test code to change.
 
 ### 1. Declare the policy
 
@@ -130,26 +136,20 @@ suppressions:
     reason: Cross-tenant report that runs as the platform operator, never as a tenant.
 ```
 
-Suppressions are keyed by `Class#method` and must give a reason. Your production code never
+Suppressions are keyed by `Class#method` and **must** give a non-blank `reason`. A suppression
+without a reason is a configuration error: QueryFence refuses to load the policy and every test
+using it fails with a message pointing at the offending entry. Your production code never
 depends on QueryFence: there are no annotations to add to it.
 
-### 2. Enable it in a JUnit 5 test
+### 2. Run your tests
 
-Register the extension and let it wrap the `DataSource` your code under test uses:
+Your existing Spring tests stay exactly as they are:
 
 ```java
+@SpringBootTest
 class OrderServiceTest {
 
-  @RegisterExtension
-  static final QueryFenceExtension queryFence = QueryFenceExtension.fromClasspath("queryfence.yml");
-
-  OrderService service;
-
-  @BeforeEach
-  void setUp() {
-    DataSource dataSource = queryFence.wrap(TestDatabase.dataSource());
-    service = new OrderService(new OrderRepository(new JdbcTemplate(dataSource)));
-  }
+  @Autowired OrderService service;
 
   @Test
   void listsPendingOrders() {
@@ -158,9 +158,39 @@ class OrderServiceTest {
 }
 ```
 
+`queryfence-spring-test` registers itself with the Spring TestContext Framework. In every test
+context (`@SpringBootTest`, `@DataJpaTest`, `@JdbcTest`, ...) it wraps each `DataSource` bean,
+loads `classpath:queryfence.yml`, and checks the SQL executed by each test method after it
+finishes. In `FAIL` mode a violation fails that test; in `REPORT` mode it is only written to the
+console and to `target/queryfence/report.json`.
+
+### Plain JDBC
+
+Without Spring, add `queryfence-junit5`, register the extension and wrap the `DataSource` your
+code under test uses:
+
+```java
+class OrderRepositoryTest {
+
+  @RegisterExtension
+  static final QueryFenceExtension queryFence = QueryFenceExtension.fromClasspath("queryfence.yml");
+
+  OrderRepository repository;
+
+  @BeforeEach
+  void setUp() {
+    DataSource dataSource = queryFence.wrap(TestDatabase.dataSource());
+    repository = new OrderRepository(new JdbcTemplate(dataSource));
+  }
+
+  @Test
+  void findsPendingOrders() {
+    assertThat(repository.findByStatus(TENANT_A, "PENDING")).hasSize(2);
+  }
+}
+```
+
 Every statement executed through the wrapped `DataSource` during a test is checked after that test.
-In `FAIL` mode a violation fails the test; in `REPORT` mode it is only written to the console and to
-`target/queryfence/report.json`.
 
 Prefer code over YAML? The same policy can be built in Java:
 
@@ -173,8 +203,6 @@ static final QueryFenceExtension queryFence =
             .deleteWithoutWhere("no-unbounded-delete")
             .build());
 ```
-
-Automatic wrapping of the Spring `DataSource` bean is planned in a separate `queryfence-spring-test` module.
 
 ## How it works
 
@@ -207,14 +235,14 @@ QueryFence never modifies or blocks the SQL. It only observes it during tests.
 
 ## How it compares
 
-QueryFence **verifies** tenant isolation. It does not **enforce** it at runtime. The tools below
+QueryFence **verifies** tenant isolation. It does not **enforce** it at runtime. Most tools below
 enforce it, and they work well together with QueryFence rather than competing with it.
 
 | | What it does | Where it works | What it does not cover |
 |---|---|---|---|
 | **Hibernate `@TenantId`** / filters | Adds the tenant condition to entity queries at runtime | Hibernate entity queries | Native SQL, `JdbcTemplate`, MyBatis, jOOQ; a disabled filter |
 | **MyBatis-Plus `TenantLineInnerInterceptor`** | Rewrites SQL at runtime to add the tenant condition | MyBatis-Plus | Other data-access code; tables on the ignore list |
-| **TenantLayer** | Tenant isolation built on Postgres Row-Level Security | Postgres + Hibernate | Other databases and ORMs |
+| **TenantLayer** | Tenant isolation built on Postgres Row-Level Security, plus scenario-based isolation tests (`@WithTenant`, `assertTenantCannotSee`, Testcontainers fixtures) | Postgres + Hibernate | Other databases and ORMs; queries no scenario exercises |
 | **Postgres RLS** | The database refuses rows from other tenants | Postgres | Other databases; roles that bypass RLS; wrong session tenant |
 | **QueryFence** | Checks every executed statement against a policy and fails the build | Any JDBC `DataSource`, any database JSqlParser understands | Runtime protection; only sees SQL your tests execute; does not check parameter values (v0.1) |
 
@@ -222,6 +250,18 @@ Why use both? Runtime enforcement is only as good as its coverage: a native quer
 path can quietly fall outside it. QueryFence shows, in CI, whether every query your tests run is actually
 fenced, whichever layer does the fencing. If you rely only on RLS, a `REPORT`-mode run also tells you
 which queries depend on it.
+
+TenantLayer and QueryFence both test isolation, but from opposite directions:
+
+- **TenantLayer tests scenarios you write.** "As tenant A, I cannot see tenant B's invoice." Each test
+  proves one behaviour end to end, against real data and real RLS policies. It covers exactly the
+  paths someone thought to write a scenario for.
+- **QueryFence checks every statement your tests happen to run.** You write no isolation-specific tests;
+  any existing test that touches `purchase_order` is checked. It proves the tenant predicate is present,
+  not that the behaviour is correct end to end.
+
+Scenario tests catch wrong values and broken policies; statement checks catch the query nobody wrote a
+scenario for. The two complement each other.
 
 Honest limits of QueryFence:
 

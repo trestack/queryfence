@@ -34,10 +34,12 @@ Hibernate `@TenantId`/filters, MyBatis-Plus tenant interceptor). It complements 
 | `queryfence-core` | Parser adapter, rule engine, policy model | **JSqlParser only** |
 | `queryfence-jdbc` | Capture SQL via datasource-proxy, resolve origin via `StackWalker` | core, datasource-proxy |
 | `queryfence-junit5` | JUnit 5 extension, YAML policy loading, console + JSON report | jdbc, junit-jupiter-api, snakeyaml |
+| `queryfence-spring-test` | Auto-wrap every `DataSource` bean in Spring test contexts; primary entry point for Spring Boot users | junit5, spring-test + spring-context (`provided`) |
 | `queryfence-bom` | Version alignment | — |
 
-Planned later: `queryfence-spring-test` (auto-wrap DataSource bean in Spring test context),
-`queryfence-integration-tests` (Testcontainers matrix), `examples/`.
+`queryfence-spring-test` is part of v0.1 but not scaffolded yet.
+
+Planned later: `queryfence-integration-tests` (Testcontainers matrix), `examples/`.
 
 ## Architecture rules (do not break)
 
@@ -71,10 +73,11 @@ Checking parameter *values* against the current tenant is out of scope for v0.1.
 ## v0.1 scope
 
 In: `require-predicate`, `update-without-where`, `delete-without-where`, JUnit 5 extension,
+`queryfence-spring-test` (zero-code setup for Spring Boot: dependency + `queryfence.yml`),
 modes FAIL and REPORT, YAML + Java builder policy, suppressions with reason, console report,
 `target/queryfence/report.json`, examples on MySQL and Postgres.
 
-Out (do not build yet): runtime blocking, Spring Boot starter, baseline file, HTML report,
+Out (do not build yet): runtime blocking, Spring Boot starter for production use, baseline file, HTML report,
 parameter value checks, custom rule DSL, UI.
 
 ## Testing approach
