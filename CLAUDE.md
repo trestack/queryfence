@@ -54,19 +54,36 @@ Planned later: `queryfence-integration-tests` (Testcontainers matrix), `examples
 
 ## Rule semantics: `require-predicate`
 
-A statement passes when, for **every occurrence** of a protected table — in FROM, JOIN,
-subqueries (WHERE/FROM/SELECT list), CTEs, each UNION branch, UPDATE/DELETE targets
-(including joined forms), and INSERT...SELECT sources — the condition at that scope contains
-a predicate that:
+`docs/DESIGN.md` is the specification (clauses RP-1..RP-13, UW-*, DW-*); the golden corpus is its
+executable form. Summary:
 
-- has the form `<alias>.<column> = <parameter or literal>` or `<alias>.<column> IN (...)`
-- sits in the **top-level AND chain** (never under OR — `tenant_id = ? OR 1=1` is a bypass)
-- is bound to **that table's alias** (a predicate on `o.tenant_id` does not protect `i`)
-- may appear in the JOIN's ON clause or the WHERE clause
+A statement passes when **every occurrence** of a protected table — in FROM, JOIN, subqueries
+(WHERE/FROM/SELECT list), CTEs, each UNION branch, UPDATE/DELETE targets (including joined forms),
+and INSERT...SELECT sources — is *fenced* by the conditions of its own query block:
 
-INSERT: the column must be present in the column list.
+- **Value predicate:** `<alias>.<column> = <parameter | literal | allowed function>` or
+  `<alias>.<column> IN (<values>)`. Functions are rejected unless listed in the rule's
+  `allowedFunctions` (e.g. `current_setting`).
+- **Transitive:** `x.tenant_id = y.tenant_id` fences one side when the other is already fenced;
+  a chain needs at least one value-predicate anchor. Correlated subqueries may anchor on a fenced
+  occurrence of an enclosing block.
+- **AND/OR:** an AND fences what any conjunct fences (with propagation); an **OR fences X only if
+  every branch fences X**, recursively (`tenant_id = ? OR 1=1` is a bypass).
+- **Alias binding:** the predicate must be bound to **that occurrence's alias**. An unqualified
+  column only binds in a single-table block; otherwise one `AMBIGUOUS_COLUMN` violation per block.
+- **Placement:** WHERE, any INNER JOIN's ON, or the ON of the LEFT JOIN that introduces the table.
+  Not: preserved side of an outer join's ON, RIGHT/FULL JOIN ON, HAVING.
+- **Derived tables / CTEs:** filters outside do not fence tables inside (no pushdown in v0.1) —
+  a known false-positive source, measured in Phase 5.
+
+INSERT: the column must be present in the column list. DDL and TRUNCATE are ignored; MERGE on a
+protected table is `UNSUPPORTED_STATEMENT`.
 Identifiers compare case-insensitively; handle quoted identifiers (MySQL backticks,
 Postgres double quotes) and schema-qualified names (`app.purchase_order`).
+Every violation message states the problem **and the fix**, from fixed templates in DESIGN.md.
+
+Capture window: the test method body and everything it calls; `@BeforeEach`/`@AfterEach`,
+context startup and migrations are not checked.
 
 Checking parameter *values* against the current tenant is out of scope for v0.1.
 
@@ -110,8 +127,8 @@ parameter value checks, custom rule DSL, UI.
 
 ## Current status and plan
 
-Phase 0 (current): write README, complete `docs/DESIGN.md`, draft first 30 golden cases.
-No production code yet beyond the scaffold.
+Phase 0 is done (README, `docs/DESIGN.md`, first golden cases). Phase 1 (current): rule engine in
+`queryfence-core` driven by the golden corpus.
 
 1. Phase 0 — design on paper (README, DESIGN.md, 30 cases)
 2. Phase 1 — core + golden corpus (≥150 cases) + PIT

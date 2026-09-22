@@ -1,27 +1,30 @@
 cases:
   - id: alias-001
-    clause: [RP-2, RP-4]
+    clause: [RP-2, RP-5]
     policy: default
-    sql: >-
+    sql: |-
       SELECT o.id FROM purchase_order o WHERE o.status = ? AND o.tenant_id IN (?, ?)
     expect: []
-    reason: The IN predicate is qualified with the occurrence's alias and sits in the AND chain.
+    reason: 'The IN predicate is qualified with the occurrence''s alias and sits in the AND chain.'
 
   - id: alias-002
-    clause: [RP-4, RP-11]
+    clause: [RP-5, RP-12]
     policy: default
-    sql: >-
+    sql: |-
       SELECT po."ID" FROM app."Purchase_Order" po WHERE po."TENANT_ID" = ?
     expect: []
-    reason: Quoted, mixed-case and schema-qualified identifiers still match purchase_order.tenant_id.
+    reason: 'Quoted, mixed-case and schema-qualified identifiers still match purchase_order.tenant_id.'
 
   - id: alias-003
-    clause: [RP-4]
+    clause: [RP-5]
     policy: default
-    sql: >-
+    sql: |-
       SELECT o.id, i.sku FROM purchase_order o JOIN order_item i ON i.order_id = o.id
       WHERE tenant_id = ?
     expect:
-      - {rule: tenant-isolation, code: MISSING_PREDICATE, table: purchase_order, alias: o}
-      - {rule: tenant-isolation, code: MISSING_PREDICATE, table: order_item, alias: i}
-    reason: An unqualified column in a two-table block cannot be bound to either occurrence.
+      - rule: tenant-isolation
+        code: AMBIGUOUS_COLUMN
+        table: purchase_order
+        alias: o
+        message: 'Column "tenant_id" is not qualified in a query block that uses several tables, so it protects none of them. Qualify it with the table alias, for example "o.tenant_id = ?".'
+    reason: 'An unqualified column in a two-table block cannot be bound to either table: qualify the column with its alias.'

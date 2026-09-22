@@ -36,15 +36,9 @@ corpus are written against. Numbered clauses (`RP-3`, `UW-1`, ...) are reference
 - **Query block** — one `SELECT ... FROM ... WHERE ...` unit. Each subquery, each CTE body and each
   branch of a set operation (`UNION`, `INTERSECT`, `EXCEPT`) is its own block. `UPDATE` and `DELETE`
   statements are blocks too.
-- **Top-level AND chain** — the list of conjuncts obtained by splitting a condition on `AND`,
-  recursively, through redundant parentheses only. Anything under `OR`, `NOT`, `CASE`, a function
-  call or a comparison is a single opaque conjunct.
-
-  ```sql
-  a AND (b AND c)         -- chain: a, b, c
-  a AND (b OR c)          -- chain: a, (b OR c)
-  NOT (a AND b)           -- chain: NOT (a AND b)
-  ```
+- **Fenced** — an occurrence is fenced when the conditions that apply to it (RP-6) guarantee that
+  it only contributes rows of the tenants named by a value (RP-2), directly or through tenant-column
+  equalities (RP-3), combined by `AND`/`OR` as defined in RP-4.
 
 ## Rule: `require-predicate`
 
@@ -53,15 +47,16 @@ corpus are written against. Numbered clauses (`RP-3`, `UW-1`, ...) are reference
   type: require-predicate
   column: tenant_id
   tables: [purchase_order, order_item, invoice]
+  allowedFunctions: [current_setting]   # optional, default empty
 ```
 
 A statement passes when **every occurrence** of every protected table is *fenced*. Each unfenced
-occurrence is one violation.
+occurrence is one violation (except RP-5, which reports one violation per query block).
 
 ### RP-1 Every occurrence is checked independently
 
-Each occurrence must be fenced by a predicate bound to its own reference name, in its own query
-block. Protecting one occurrence never protects another.
+Each occurrence must be fenced by a predicate bound to its own reference name. Protecting one
+occurrence never protects another, except through an explicit tenant-column equality (RP-3).
 
 ```sql
 -- pass
@@ -74,57 +69,97 @@ SELECT * FROM purchase_order o WHERE o.status = ?
 SELECT * FROM purchase_order o JOIN purchase_order p ON p.parent_id = o.id WHERE o.tenant_id = ?
 ```
 
-### RP-2 Predicate form
+### RP-2 Value predicates
 
-A conjunct fences an occurrence when it has one of these forms, where `ref` is the occurrence's
-reference name and `col` is the rule's `column`:
+A **value predicate** on occurrence `X` has one of these forms, where `ref` is `X`'s reference name
+and `col` is the rule's `column`:
 
 | Form | Example |
 |---|---|
 | `ref.col = value` or `value = ref.col` | `o.tenant_id = ?`, `42 = o.tenant_id` |
-| `ref.col IN (value, ...)` with at least one value | `o.tenant_id IN (?, ?)` |
+| `ref.col IN (value, ...)` with at least one value, all values | `o.tenant_id IN (?, ?)` |
 
-`value` is a JDBC parameter (`?`), a named or positional parameter (`:tenant`, `$1`), a string or
-numeric literal, or a `CAST` of one of those (`CAST(? AS BIGINT)`, `?::bigint`).
+`value` is a JDBC parameter (`?`), a named parameter (`:tenant`), a string or numeric literal, a
+call to a function listed in the rule's `allowedFunctions` (compared by unqualified name,
+case-insensitively, arguments not checked), or a `CAST` of any of those (`CAST(? AS BIGINT)`,
+`current_setting('app.tenant_id')::bigint`).
 
-Everything else does **not** fence, including: `<>`, `!=`, `<`, `>`, `LIKE`, `BETWEEN`,
-`IS NULL`, `IS NOT NULL`, `IN (subquery)`, comparison with a function call
-(`tenant_id = current_setting('app.tenant')`), and comparison with another column
-(`i.tenant_id = o.tenant_id`).
+Not value predicates: `<>`, `!=`, `<`, `>`, `LIKE`, `BETWEEN`, `IS NULL`, `IS NOT NULL`,
+`NOT IN`, `IN (subquery)`, and comparison with a function that is not in `allowedFunctions`.
 
 ```sql
 -- pass
 SELECT * FROM invoice WHERE invoice.tenant_id IN (?, ?)
 
--- violation: comparison with a column, not a value
-SELECT * FROM purchase_order o JOIN order_item i ON i.order_id = o.id AND i.tenant_id = o.tenant_id
-WHERE o.tenant_id = ?
+-- violation by default; pass with allowedFunctions: [current_setting]
+SELECT * FROM purchase_order WHERE tenant_id = current_setting('app.tenant_id')::bigint
 
 -- violation: inequality selects every other tenant
 SELECT * FROM purchase_order o WHERE o.tenant_id <> ?
 ```
 
-### RP-3 Top-level AND chain only
+### RP-3 Tenant-column equality (transitive fencing)
 
-The fencing conjunct must be in the top-level AND chain of a permitted condition (RP-5). A
-predicate under `OR` is never accepted, even when every branch looks restrictive — use `IN`.
+`X.col = Y.col`, where `X` and `Y` are both occurrences of tables protected by the rule, fences `X`
+when `Y` is already fenced, and fences `Y` when `X` is already fenced. Fencing propagates along a
+chain of such equalities (`o` anchored, `i.tenant_id = o.tenant_id`,
+`v.tenant_id = i.tenant_id`). At least one occurrence of the chain must be anchored by a value
+predicate; equalities alone fence nothing.
 
 ```sql
--- pass
-SELECT * FROM purchase_order o WHERE (o.status = ? AND (o.tenant_id = ?))
+-- pass: i is fenced through o, which is anchored by a parameter
+SELECT * FROM purchase_order o JOIN order_item i ON i.order_id = o.id AND i.tenant_id = o.tenant_id
+WHERE o.tenant_id = ?
 
--- violation: OR makes the tenant filter optional
-SELECT * FROM purchase_order o WHERE o.tenant_id = ? OR o.status = 'OPEN'
-
--- violation: rejected although both branches restrict; rewrite as IN (?, ?)
-SELECT * FROM purchase_order o WHERE o.tenant_id = ? OR o.tenant_id = ?
+-- violation: purchase_order (o) and order_item (i) — no anchor anywhere in the chain
+SELECT * FROM purchase_order o JOIN order_item i ON i.order_id = o.id AND i.tenant_id = o.tenant_id
 ```
 
-### RP-4 Alias binding
+### RP-4 AND / OR composition
 
-The column must be qualified with the occurrence's reference name. An unqualified column fences an
-occurrence **only** when that occurrence is the sole row source of its query block. When a table has
-an alias, the table name is not a valid qualifier.
+Whether a condition fences an occurrence is decided recursively, given the set `K` of occurrences
+already known to be fenced:
+
+| Condition | Fences |
+|---|---|
+| value predicate on `X` (RP-2) | `X` |
+| `X.col = Y.col` (RP-3) | `X` if `Y` ∈ `K`; `Y` if `X` ∈ `K` |
+| `a AND b AND ...` | the smallest set `S` such that every conjunct's result, computed with `K ∪ S`, is in `S` |
+| `a OR b OR ...` | the occurrences fenced by **every** branch (intersection) |
+| parentheses | whatever the inner condition fences |
+| anything else (`NOT`, `CASE`, functions, subqueries, ...) | nothing |
+
+An `OR` therefore fences `X` only when no branch can return rows of another tenant.
+
+```sql
+-- pass: AND chain
+SELECT * FROM purchase_order o WHERE (o.status = ? AND (o.tenant_id = ?))
+
+-- pass: every branch fences o
+SELECT * FROM purchase_order o WHERE o.tenant_id = ? OR o.tenant_id = ?
+
+-- pass: applied recursively
+SELECT * FROM purchase_order o
+WHERE (o.tenant_id = ? AND (o.status = 'A' OR o.status = 'B')) OR (o.tenant_id IN (?, ?) AND o.total > 0)
+
+-- violation: the second branch returns every tenant's rows
+SELECT * FROM purchase_order o WHERE o.tenant_id = ? OR o.status = 'OPEN'
+
+-- violation: one branch out of three has no tenant filter
+SELECT * FROM purchase_order o
+WHERE (o.tenant_id = ? AND o.status = 'A') OR (o.tenant_id = ? AND o.status = 'B') OR o.status = 'C'
+```
+
+### RP-5 Alias binding and ambiguous columns
+
+The column must be qualified with the occurrence's reference name. An unqualified column binds to
+the occurrence **only** when that occurrence is the sole row source of its query block. When a table
+has an alias, the table name is not a valid qualifier.
+
+In a query block with several row sources, an unqualified tenant column used in a predicate cannot
+be bound, because QueryFence does not know the schema. If that block has unfenced occurrences, they
+are reported as **one** `AMBIGUOUS_COLUMN` violation for the block instead of one
+`MISSING_PREDICATE` each: the fix is to qualify the column.
 
 ```sql
 -- pass: single row source, unqualified column is unambiguous
@@ -136,26 +171,27 @@ SELECT * FROM purchase_order WHERE purchase_order.tenant_id = ?
 -- violation: order_item (i) — the predicate is bound to o
 SELECT * FROM purchase_order o JOIN order_item i ON i.order_id = o.id WHERE o.tenant_id = ?
 
--- violation: purchase_order (o) and order_item (i) — unqualified column in a two-table block
+-- violation AMBIGUOUS_COLUMN: unqualified column in a two-table block
 SELECT * FROM purchase_order o JOIN order_item i ON i.order_id = o.id WHERE tenant_id = ?
 ```
 
-### RP-5 Where the predicate may appear
+### RP-6 Where the predicate may appear
 
-For an occurrence `T` in a query block, a fencing conjunct is accepted from:
+For an occurrence `T` in a query block, conditions are taken from:
 
-1. the top-level AND chain of the block's `WHERE` clause;
-2. the top-level AND chain of the `ON` clause of any `INNER` (or plain) `JOIN` in the block, since
-   inner-join conditions filter exactly like `WHERE`;
+1. the block's `WHERE` clause;
+2. the `ON` clause of any `INNER` (or plain) `JOIN` in the block, since inner-join conditions filter
+   exactly like `WHERE`;
 3. the `ON` clause of the `LEFT JOIN` that introduces `T` (T is the nullable side, so the condition
-   limits which of its rows can appear).
+   limits which of its rows can appear). Such a condition fences `T` only.
 
-Not accepted: the `ON` clause of a `LEFT JOIN` for the preserved (left) side, the `ON` clause of a
-`RIGHT JOIN` for the table it introduces, and any `FULL JOIN` `ON` clause. Those conditions do not
-remove rows of the preserved side. `HAVING` is not accepted.
+These conditions are combined as one `AND` (RP-4). Not accepted: the `ON` clause of a `LEFT JOIN` for
+the preserved (left) side, any `RIGHT JOIN` or `FULL JOIN` `ON` clause, and `HAVING`. Those conditions
+do not remove rows of the preserved side. The fix is to move the tenant predicate of the preserved
+table to `WHERE`.
 
 ```sql
--- pass: tenant filter for o in an inner join's ON clause
+-- pass: tenant filters in an inner join's ON clause
 SELECT * FROM purchase_order o JOIN order_item i ON i.order_id = o.id AND o.tenant_id = ? AND i.tenant_id = ?
 
 -- pass: i is the nullable side of its own LEFT JOIN
@@ -166,27 +202,38 @@ WHERE o.tenant_id = ?
 SELECT * FROM purchase_order o LEFT JOIN order_item i ON i.order_id = o.id AND o.tenant_id = ? AND i.tenant_id = ?
 ```
 
-### RP-6 Subqueries
+### RP-7 Subqueries
 
 Every subquery is its own query block and is checked on its own, wherever it appears: `WHERE`
 (`IN`, `EXISTS`, scalar comparison), `SELECT` list, `FROM` (derived table), `HAVING`, `SET` of an
-`UPDATE`. A predicate in an outer block never fences an occurrence in an inner block, and a filter
-applied to a derived table from outside does not fence the table inside it.
+`UPDATE`. A predicate in an outer block never fences an occurrence in an inner block.
+
+A correlated subquery may anchor its occurrences on an enclosing block through a tenant-column
+equality (RP-3): `i.tenant_id = o.tenant_id` inside the subquery fences `i` when `o` is a fenced
+occurrence of an enclosing block.
+
+A filter applied to a derived table from outside does **not** fence the table inside it: v0.1 does
+not push predicates down. This is safe but is a **known source of false positives** (some ORMs wrap
+queries in a derived table for pagination). Its real-world rate will be measured in Phase 5.
 
 ```sql
 -- pass
 SELECT * FROM purchase_order o WHERE o.tenant_id = ?
   AND EXISTS (SELECT 1 FROM order_item i WHERE i.order_id = o.id AND i.tenant_id = ?)
 
+-- pass: correlated equality to a fenced outer occurrence
+SELECT * FROM purchase_order o WHERE o.tenant_id = ?
+  AND EXISTS (SELECT 1 FROM order_item i WHERE i.order_id = o.id AND i.tenant_id = o.tenant_id)
+
 -- violation: order_item (i) inside EXISTS is unfenced
 SELECT * FROM purchase_order o WHERE o.tenant_id = ?
   AND EXISTS (SELECT 1 FROM order_item i WHERE i.order_id = o.id)
 
--- violation: purchase_order inside the derived table; the outer filter does not count
+-- violation (known false positive): purchase_order inside the derived table
 SELECT * FROM (SELECT * FROM purchase_order) t WHERE t.tenant_id = ?
 ```
 
-### RP-7 Set operations
+### RP-8 Set operations
 
 Each branch of `UNION`, `UNION ALL`, `INTERSECT` and `EXCEPT` is its own query block.
 
@@ -198,11 +245,12 @@ SELECT id FROM purchase_order WHERE tenant_id = ? UNION SELECT id FROM invoice W
 SELECT id FROM purchase_order WHERE tenant_id = ? UNION SELECT id FROM invoice
 ```
 
-### RP-8 Common table expressions
+### RP-9 Common table expressions
 
 Each CTE body is a query block. A reference to a CTE name is not an occurrence, even when the CTE
 has the same name as a protected table. As with derived tables, a filter applied where the CTE is
-used does not fence the tables inside its body. Recursive CTEs: each branch is checked.
+used does not fence the tables inside its body (same known false-positive source as RP-7).
+Recursive CTEs: each branch is checked.
 
 ```sql
 -- pass
@@ -212,11 +260,11 @@ WITH mine AS (SELECT * FROM purchase_order WHERE tenant_id = ?) SELECT * FROM mi
 WITH all_orders AS (SELECT * FROM purchase_order) SELECT * FROM all_orders a WHERE a.tenant_id = ?
 ```
 
-### RP-9 UPDATE and DELETE
+### RP-10 UPDATE and DELETE
 
-The target is an occurrence; its fencing predicate must be in the statement's `WHERE` chain (or an
-inner-join `ON` chain for MySQL multi-table forms). Joined tables of multi-table forms are
-occurrences under the same rules. Subqueries in `SET` and `WHERE` are checked per RP-6.
+The target is an occurrence; its conditions come from the statement's `WHERE` (and inner-join `ON`
+clauses of MySQL multi-table forms). Joined tables of multi-table forms (`JOIN`, `FROM`, `USING`)
+are occurrences under the same rules. Subqueries in `SET` and `WHERE` are checked per RP-7.
 
 ```sql
 -- pass
@@ -229,12 +277,12 @@ DELETE FROM purchase_order WHERE id = ?
 UPDATE purchase_order o JOIN order_item i ON i.order_id = o.id SET i.price = ? WHERE o.tenant_id = ?
 ```
 
-### RP-10 INSERT
+### RP-11 INSERT
 
 `INSERT INTO t (...)` into a protected table passes only when the rule's column appears in the
 explicit column list (MySQL `INSERT ... SET col = ...` counts). An `INSERT` without a column list
 is a violation: we cannot prove which columns are set. The inserted value is not checked (v0.1).
-For `INSERT ... SELECT`, the `SELECT` is checked as a query block per RP-1..RP-8.
+For `INSERT ... SELECT`, the `SELECT` is checked as a query block per RP-1..RP-9.
 `REPLACE INTO` (MySQL) is treated like `INSERT`.
 
 ```sql
@@ -251,7 +299,7 @@ INSERT INTO purchase_order VALUES (?, ?, ?)
 INSERT INTO invoice (tenant_id, order_id) SELECT o.tenant_id, o.id FROM purchase_order o
 ```
 
-### RP-11 Identifiers
+### RP-12 Identifiers
 
 - Identifiers compare case-insensitively after removing quotes (MySQL backticks, ANSI/Postgres
   double quotes, SQL Server brackets).
@@ -259,11 +307,12 @@ INSERT INTO invoice (tenant_id, order_id) SELECT o.tenant_id, o.id FROM purchase
   matches `purchase_order`). An entry with a schema (`app.purchase_order`) matches references with
   that schema **and** unqualified references, since the search path is unknown.
 
-### RP-12 Statements out of scope of the rule
+### RP-13 Statements out of scope of the rule
 
 Statements that touch no protected table pass. DDL, `TRUNCATE`, transaction control (`BEGIN`,
-`COMMIT`, `SET`, `SAVEPOINT`), `SHOW`/`EXPLAIN` and `CALL` are ignored. A DML statement type the
-rule does not analyse (`MERGE` in v0.1) that references a protected table is a violation
+`COMMIT`, `SET`, `SAVEPOINT`), `SHOW`/`EXPLAIN` and `CALL` are ignored: test fixtures routinely
+truncate tables, and schema statements carry no tenant data. A DML statement type the rule does
+not analyse (`MERGE` in v0.1) that references a protected table is a violation
 (`UNSUPPORTED_STATEMENT`). A string holding several statements separated by `;` is split and each
 statement is checked.
 
@@ -320,28 +369,34 @@ fixed test-first by adding corpus cases.
 
 | Bypass | Example | Blocked by |
 |---|---|---|
-| Predicate under `OR` | `WHERE o.tenant_id = ? OR 1 = 1` | RP-3 |
-| Predicate under `NOT` / negation | `WHERE NOT (o.tenant_id <> ?)` | RP-2, RP-3 (opaque conjunct) |
+| `OR` with an unfenced branch | `WHERE o.tenant_id = ? OR 1 = 1` | RP-4 |
+| Predicate under `NOT` / negation | `WHERE NOT (o.tenant_id <> ?)` | RP-4 (`NOT` fences nothing) |
 | Inequality or range | `WHERE o.tenant_id <> ?`, `> 0` | RP-2 |
-| Alias bound to the wrong table | `... JOIN order_item i ... WHERE o.tenant_id = ?` | RP-1, RP-4 |
+| Comparison with an arbitrary function | `WHERE o.tenant_id = some_fn()` | RP-2 (`allowedFunctions`) |
+| Alias bound to the wrong table | `... JOIN order_item i ... WHERE o.tenant_id = ?` | RP-1, RP-5 |
+| Unqualified column in a multi-table block | `... JOIN order_item i ... WHERE tenant_id = ?` | RP-5 |
 | Join without a condition for the joined table | `JOIN invoice v ON v.order_id = o.id` | RP-1 |
 | Self-join with one side fenced | `purchase_order o JOIN purchase_order p` | RP-1 |
-| Tenant filter on the preserved side of a `LEFT JOIN` placed in `ON` | `LEFT JOIN ... ON ... AND o.tenant_id = ?` | RP-5 |
-| Unfenced subquery (`EXISTS`, `IN`, scalar, `SELECT` list) | `EXISTS (SELECT 1 FROM order_item i WHERE ...)` | RP-6 |
-| Filter outside a derived table | `FROM (SELECT * FROM purchase_order) t WHERE t.tenant_id = ?` | RP-6 |
-| Unfenced `UNION` branch | `... UNION SELECT id FROM invoice` | RP-7 |
-| Unfenced CTE body | `WITH a AS (SELECT * FROM purchase_order) ...` | RP-8 |
-| Column-to-column comparison | `i.tenant_id = o.tenant_id` alone | RP-2 |
+| Tenant filter on the preserved side of a `LEFT JOIN` placed in `ON` | `LEFT JOIN ... ON ... AND o.tenant_id = ?` | RP-6 |
+| Unfenced subquery (`EXISTS`, `IN`, scalar, `SELECT` list) | `EXISTS (SELECT 1 FROM order_item i WHERE ...)` | RP-7 |
+| Filter outside a derived table | `FROM (SELECT * FROM purchase_order) t WHERE t.tenant_id = ?` | RP-7 |
+| Unfenced `UNION` branch | `... UNION SELECT id FROM invoice` | RP-8 |
+| Unfenced CTE body | `WITH a AS (SELECT * FROM purchase_order) ...` | RP-9 |
+| Tenant-column equalities with no anchor | `i.tenant_id = o.tenant_id` alone | RP-3 |
 | Predicate hidden in a comment | `WHERE o.status = ? -- AND o.tenant_id = ?` | parser drops comments; RP-1 |
-| `INSERT` without column list | `INSERT INTO purchase_order VALUES (...)` | RP-10 |
-| Unfenced `INSERT ... SELECT` source | `INSERT INTO t (...) SELECT ... FROM purchase_order` | RP-10 |
-| Quoting / case / schema tricks | `` `Purchase_Order` ``, `app."PURCHASE_ORDER"` | RP-11 |
+| `INSERT` without column list | `INSERT INTO purchase_order VALUES (...)` | RP-11 |
+| Unfenced `INSERT ... SELECT` source | `INSERT INTO t (...) SELECT ... FROM purchase_order` | RP-11 |
+| Quoting / case / schema tricks | `` `Purchase_Order` ``, `app."PURCHASE_ORDER"` | RP-12 |
 | SQL the parser does not understand | vendor syntax | fail closed: `UNPARSEABLE` |
-| Unsupported DML | `MERGE INTO purchase_order ...` | RP-12 |
+| Unsupported DML | `MERGE INTO purchase_order ...` | RP-13 |
 
 Known **unblocked** paths in v0.1 (documented limitations): views and stored procedures over
-protected tables (list views in `tables` as a workaround), the value bound to `?`, upsert
-conflict branches, and SQL that no test executes.
+protected tables (list views in `tables` as a workaround), the value bound to `?` or returned by an
+allowed function, upsert conflict branches, and SQL that no test executes.
+
+Known **false-positive** sources in v0.1, to be measured in Phase 5 (target below 5%): tenant
+filters applied outside a derived table or CTE (RP-7, RP-9), and tenant filters on the preserved
+side of an outer join placed in `ON` (RP-6, a real bug in most cases).
 
 ## Violation model
 
@@ -351,11 +406,29 @@ Each violation carries:
 |---|---|
 | `ruleId` | `tenant-isolation` |
 | `ruleType` | `require-predicate` |
-| `code` | `MISSING_PREDICATE`, `MISSING_INSERT_COLUMN`, `NO_WHERE`, `TAUTOLOGICAL_WHERE`, `UNSUPPORTED_STATEMENT`, `UNPARSEABLE` |
-| `table`, `alias` | `order_item`, `i` (for require-predicate) |
+| `code` | `MISSING_PREDICATE`, `AMBIGUOUS_COLUMN`, `MISSING_INSERT_COLUMN`, `NO_WHERE`, `TAUTOLOGICAL_WHERE`, `UNSUPPORTED_STATEMENT`, `UNPARSEABLE` |
+| `table`, `alias` | `order_item`, `i`; normalized table name (lower case, no quotes, no schema); `null` when not applicable |
+| `message` | what is wrong **and how to fix it** (see below) |
 | `sql` | the statement as sent to the driver |
 | `origin` | `com.acme.order.OrderRepository#findByStatus (OrderRepository.java:42)` |
 | `test` | `com.acme.order.OrderServiceTest#listsPendingOrders` |
+
+Every message states the problem and the fix. Messages are generated from fixed templates, so the
+golden corpus asserts them verbatim. `{ref}` is the alias, or the table name when there is no alias;
+`{table}` is shown as `table (alias)` when there is an alias.
+
+| Code | Message template |
+|---|---|
+| `MISSING_PREDICATE` | `{table} has no tenant filter. Add "{ref}.{column} = ?" to the WHERE clause of the query block that uses it.` |
+| `AMBIGUOUS_COLUMN` | `Column "{column}" is not qualified in a query block that uses several tables, so it protects none of them. Qualify it with the table alias, for example "{ref}.{column} = ?".` |
+| `MISSING_INSERT_COLUMN` | `INSERT into {table} does not set {column}. Add {column} to the column list and bind the current tenant.` |
+| `NO_WHERE` | `UPDATE of {table} has no WHERE clause and changes every row. Add a WHERE clause that selects only the intended rows.` (`DELETE from {table} ... removes every row.` for DELETE) |
+| `TAUTOLOGICAL_WHERE` | `UPDATE of {table} has a WHERE clause that is always true and changes every row. Replace it with a condition that selects only the intended rows.` (DELETE: `removes every row`) |
+| `UNSUPPORTED_STATEMENT` | `{STATEMENT} statements on {table} are not analysed yet. Rewrite the statement as INSERT or UPDATE, or suppress its origin with a reason.` |
+| `UNPARSEABLE` | `QueryFence could not parse this statement, so it cannot prove it safe. Report the SQL to QueryFence, or set onUnparseable: REPORT to only report it.` |
+
+For `AMBIGUOUS_COLUMN`, `{ref}` is the first unfenced occurrence of the block and `table`/`alias`
+are that occurrence's.
 
 ## Architecture
 
@@ -392,9 +465,11 @@ Each violation carries:
  JVM / launcher session ends ──► target/queryfence/report.json
 ```
 
-- **Capture window.** Only statements executed during the test method body are checked
-  (JUnit `BeforeTestExecutionCallback` to `AfterTestExecutionCallback`). Fixture code in
-  `@BeforeEach`/`@AfterEach`, context startup and migrations are not checked in v0.1.
+- **Capture window.** Statements executed by the test method body **and all code it calls**, on
+  any thread, through a wrapped `DataSource` are checked: the window runs from JUnit's
+  `BeforeTestExecutionCallback` to `AfterTestExecutionCallback`. Fixture code in
+  `@BeforeEach`/`@AfterEach`/`@BeforeAll`/`@AfterAll`, Spring context startup and schema
+  migrations run outside that window and are not checked.
 - **Origin resolution.** `StackWalker` returns the first frame whose class is not in an ignored
   package: `java.`, `javax.`, `jakarta.`, `jdk.`, `sun.`, `org.hibernate.`, `org.springframework.`,
   `org.apache.ibatis.`, `org.mybatis.`, `org.jooq.`, `com.zaxxer.`, `net.ttddyy.`,
@@ -415,8 +490,12 @@ Policy policy = Policy.builder()
     .updateWithoutWhere("no-unbounded-update")
     .deleteWithoutWhere("no-unbounded-delete")
     .suppress("tenant-isolation", "com.acme.admin.PlatformReportJob#nightlyTotals", "reason ...")
-    .onUnparseable(Severity.FAIL)
+    .mode(Mode.FAIL)
+    .onUnparseable(Mode.FAIL)
     .build();
+
+// allowedFunctions:
+// .requirePredicate("tenant-isolation", "tenant_id", List.of("purchase_order"), List.of("current_setting"))
 
 SqlChecker checker = SqlChecker.of(policy);
 List<Violation> violations = checker.check("SELECT ...");   // no origin, no suppression
@@ -442,6 +521,7 @@ rules:
     type: require-predicate      # require-predicate | update-without-where | delete-without-where
     column: tenant_id            # require-predicate only, required
     tables: [purchase_order]     # require-predicate only, required, non-empty
+    allowedFunctions: []         # require-predicate only, optional (RP-2)
 suppressions:
   - rule: tenant-isolation       # must name an existing rule id
     origin: com.acme.Foo#bar     # required, Class#method

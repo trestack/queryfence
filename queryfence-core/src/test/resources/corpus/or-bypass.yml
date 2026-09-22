@@ -1,26 +1,52 @@
 cases:
   - id: or-bypass-001
-    clause: [RP-3]
+    clause: [RP-4]
     policy: default
-    sql: >-
+    sql: |-
       SELECT o.id FROM purchase_order o WHERE o.tenant_id = ? OR 1 = 1
     expect:
-      - {rule: tenant-isolation, code: MISSING_PREDICATE, table: purchase_order, alias: o}
-    reason: Under OR the tenant predicate is optional, and OR 1 = 1 returns every tenant's rows.
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: o
+        message: 'purchase_order (o) has no tenant filter. Add "o.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'The branch 1 = 1 fences nothing, so the OR returns every tenant''s rows.'
 
   - id: or-bypass-002
-    clause: [RP-3]
+    clause: [RP-4]
     policy: default
-    sql: >-
+    sql: |-
       SELECT o.id FROM purchase_order o WHERE o.tenant_id = ? OR o.tenant_id = ?
-    expect:
-      - {rule: tenant-isolation, code: MISSING_PREDICATE, table: purchase_order, alias: o}
-    reason: Predicates under OR are never accepted, even when every branch restricts the tenant; IN (?, ?) is the accepted form.
+    expect: []
+    reason: 'Every branch of the OR fences o, so it behaves like IN (?, ?).'
 
   - id: or-bypass-003
-    clause: [RP-3]
+    clause: [RP-4]
     policy: default
-    sql: >-
+    sql: |-
       SELECT o.id FROM purchase_order o WHERE o.tenant_id = ? AND (o.status = ? OR o.status = ?)
     expect: []
-    reason: The OR is a separate conjunct; the tenant predicate itself sits in the top-level AND chain.
+    reason: 'The OR is a separate conjunct; the tenant predicate itself is in the AND chain.'
+
+  - id: or-bypass-004
+    clause: [RP-4]
+    policy: default
+    sql: |-
+      SELECT o.id FROM purchase_order o
+      WHERE (o.tenant_id = ? AND o.status = 'A') OR (o.tenant_id = ? AND o.status = 'B') OR o.status = 'C'
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: o
+        message: 'purchase_order (o) has no tenant filter. Add "o.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'One branch out of three has no tenant filter, so the OR does not fence o.'
+
+  - id: or-bypass-005
+    clause: [RP-4]
+    policy: default
+    sql: |-
+      SELECT o.id FROM purchase_order o
+      WHERE (o.tenant_id = ? AND (o.status = 'A' OR o.status = 'B')) OR (o.tenant_id IN (?, ?) AND o.total > 0)
+    expect: []
+    reason: 'Applied recursively, both top-level branches fence o through an AND conjunct.'

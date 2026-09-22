@@ -1,21 +1,25 @@
 cases:
   - id: union-001
-    clause: [RP-7]
+    clause: [RP-8]
     policy: default
-    sql: >-
+    sql: |-
       SELECT id FROM purchase_order WHERE tenant_id = ?
       UNION ALL
       SELECT order_id FROM invoice WHERE tenant_id = ?
     expect: []
-    reason: Each UNION branch is its own block and each fences its own table.
+    reason: 'Each UNION branch is its own block and each fences its own table.'
 
   - id: union-002
-    clause: [RP-7]
+    clause: [RP-8]
     policy: default
-    sql: >-
+    sql: |-
       SELECT id FROM purchase_order WHERE tenant_id = ?
       UNION
       SELECT order_id FROM invoice WHERE status = 'OVERDUE'
     expect:
-      - {rule: tenant-isolation, code: MISSING_PREDICATE, table: invoice, alias: null}
-    reason: The second branch reads invoice without a tenant predicate.
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: invoice
+        alias: null
+        message: 'invoice has no tenant filter. Add "invoice.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'The second branch reads invoice without a tenant predicate.'

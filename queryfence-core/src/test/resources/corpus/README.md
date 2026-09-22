@@ -4,7 +4,7 @@ Data files of SQL statements and the violations QueryFence must report for them.
 the executable form of [docs/DESIGN.md](../../../../../docs/DESIGN.md): every case cites the clause
 it exercises, and a disagreement between a case and DESIGN.md is a bug in one of them.
 
-A parameterized test (not written yet) will load every `*.yml` file in this directory except
+A parameterized test (Phase 1) will load every `*.yml` file in this directory except
 `policies.yml`, run each case through the rule engine and compare the result with `expect`.
 
 ## Files
@@ -27,20 +27,22 @@ A parameterized test (not written yet) will load every `*.yml` file in this dire
 ```yaml
 cases:
   - id: join-001                 # unique across the corpus: <topic>-<nnn>
-    clause: [RP-1, RP-4]         # DESIGN.md clauses this case exercises
+    clause: [RP-1, RP-5]         # DESIGN.md clauses this case exercises
     policy: default              # a key in policies.yml
-    sql: >-
+    sql: |-
       SELECT ...
     expect:                      # [] when the statement must pass
       - rule: tenant-isolation   # rule id from the policy
         code: MISSING_PREDICATE  # violation code from DESIGN.md "Violation model"
-        table: order_item        # table of the unfenced occurrence (null for non-table codes)
+        table: order_item        # normalized table name
         alias: i                 # alias as written in the SQL, null when there is none
+        message: '...'           # exact message, including how to fix it
     reason: One sentence explaining why.
 ```
 
-Order of `expect` entries is not significant. Every expected violation must be reported, and no
-other violation may be reported.
+Messages come from the fixed templates in DESIGN.md "Violation model" and are compared verbatim,
+so every expected violation documents both the problem and the fix. Order of `expect` entries is
+not significant. Every expected violation must be reported, and no other violation may be reported.
 
 ## Adding cases
 

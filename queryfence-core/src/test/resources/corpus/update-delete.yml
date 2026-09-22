@@ -1,37 +1,65 @@
 cases:
   - id: update-delete-001
-    clause: [RP-9, UW-3]
+    clause: [RP-10, UW-3]
     policy: default
-    sql: >-
+    sql: |-
       UPDATE purchase_order SET status = ? WHERE tenant_id = ? AND id = ?
     expect: []
-    reason: The UPDATE target is fenced in the WHERE AND chain and the WHERE is not a tautology.
+    reason: 'The UPDATE target is fenced and the WHERE is not a tautology.'
 
   - id: update-delete-002
-    clause: [RP-9, UW-1]
+    clause: [RP-10, UW-1]
     policy: default
-    sql: >-
+    sql: |-
       UPDATE purchase_order SET status = 'CLOSED'
     expect:
-      - {rule: tenant-isolation, code: MISSING_PREDICATE, table: purchase_order, alias: null}
-      - {rule: no-unbounded-update, code: NO_WHERE, table: purchase_order, alias: null}
-    reason: An UPDATE without WHERE touches every row of every tenant and breaks both rules.
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: null
+        message: 'purchase_order has no tenant filter. Add "purchase_order.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+      - rule: no-unbounded-update
+        code: NO_WHERE
+        table: purchase_order
+        alias: null
+        message: 'UPDATE of purchase_order has no WHERE clause and changes every row. Add a WHERE clause that selects only the intended rows.'
+    reason: 'An UPDATE without WHERE touches every row of every tenant and breaks both rules.'
 
   - id: update-delete-003
-    clause: [RP-9, DW-3]
+    clause: [RP-10, DW-3]
     policy: default
-    sql: >-
+    sql: |-
       DELETE FROM purchase_order WHERE id = ?
     expect:
-      - {rule: tenant-isolation, code: MISSING_PREDICATE, table: purchase_order, alias: null}
-    reason: Deleting by id alone lets one tenant delete another tenant's order by guessing its id.
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: null
+        message: 'purchase_order has no tenant filter. Add "purchase_order.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'Deleting by id alone lets one tenant delete another tenant''s order by guessing its id.'
 
   - id: update-delete-004
-    clause: [RP-9, DW-2]
+    clause: [RP-10, DW-2]
     policy: default
-    sql: >-
+    sql: |-
       DELETE FROM order_item WHERE 1 = 1
     expect:
-      - {rule: tenant-isolation, code: MISSING_PREDICATE, table: order_item, alias: null}
-      - {rule: no-unbounded-delete, code: TAUTOLOGICAL_WHERE, table: order_item, alias: null}
-    reason: WHERE 1 = 1 is a tautology, so the DELETE is unbounded and unfenced.
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: order_item
+        alias: null
+        message: 'order_item has no tenant filter. Add "order_item.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+      - rule: no-unbounded-delete
+        code: TAUTOLOGICAL_WHERE
+        table: order_item
+        alias: null
+        message: 'DELETE from order_item has a WHERE clause that is always true and removes every row. Replace it with a condition that selects only the intended rows.'
+    reason: 'WHERE 1 = 1 is a tautology, so the DELETE is unbounded and unfenced.'
+
+  - id: update-delete-005
+    clause: [RP-13]
+    policy: default
+    sql: |-
+      TRUNCATE TABLE purchase_order
+    expect: []
+    reason: 'TRUNCATE is DDL and ignored by every rule, because test fixtures routinely truncate tables.'

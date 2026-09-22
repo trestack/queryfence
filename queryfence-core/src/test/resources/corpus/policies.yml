@@ -1,5 +1,9 @@
 # Named policies referenced by corpus cases through `policy: <name>`.
 # Same schema as queryfence.yml (see docs/DESIGN.md "Policy file").
+#
+# Tables used by the corpus:
+#   purchase_order, order_item, invoice   protected, each has tenant_id
+#   currency                              global reference data, not protected
 
 default:
   version: 1
@@ -14,6 +18,19 @@ default:
       type: update-without-where
     - id: no-unbounded-delete
       type: delete-without-where
-# Tables used by the corpus:
-#   purchase_order, order_item, invoice   protected, each has tenant_id
-#   currency                              global reference data, not protected
+
+# default + RLS-style comparisons with current_setting(...) accepted (RP-2)
+rls:
+  version: 1
+  mode: FAIL
+  onUnparseable: FAIL
+  rules:
+    - id: tenant-isolation
+      type: require-predicate
+      column: tenant_id
+      tables: [purchase_order, order_item, invoice]
+      allowedFunctions: [current_setting]
+    - id: no-unbounded-update
+      type: update-without-where
+    - id: no-unbounded-delete
+      type: delete-without-where
