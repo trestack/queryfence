@@ -66,8 +66,9 @@
     <javadoc-plugin.version>3.11.2</javadoc-plugin.version>
     <gpg-plugin.version>3.2.7</gpg-plugin.version>
     <central-publishing-plugin.version>0.8.0</central-publishing-plugin.version>
-    <spotless-plugin.version>2.44.5</spotless-plugin.version>
-    <jacoco-plugin.version>0.8.13</jacoco-plugin.version>
+    <spotless-plugin.version>3.10.2</spotless-plugin.version>
+    <google-java-format.version>1.36.1</google-java-format.version>
+    <jacoco-plugin.version>0.8.15</jacoco-plugin.version>
     <enforcer-plugin.version>3.6.1</enforcer-plugin.version>
   </properties>
 
@@ -164,7 +165,9 @@
         <version>${spotless-plugin.version}</version>
         <configuration>
           <java>
-            <googleJavaFormat/>
+            <googleJavaFormat>
+              <version>${google-java-format.version}</version>
+            </googleJavaFormat>
             <removeUnusedImports/>
             <licenseHeader>
               <file>${maven.multiModuleProjectDirectory}/config/license-header.txt</file>
@@ -191,6 +194,11 @@
         <groupId>org.jacoco</groupId>
         <artifactId>jacoco-maven-plugin</artifactId>
         <version>${jacoco-plugin.version}</version>
+        <configuration>
+          <includes>
+            <include>dev/trestack/**</include>
+          </includes>
+        </configuration>
         <executions>
           <execution>
             <goals>
@@ -210,6 +218,16 @@
   </build>
 
   <profiles>
+    <!-- google-java-format needs JDK 21+ to run; formatting is still enforced by the JDK 21/25 CI jobs -->
+    <profile>
+      <id>skip-format-check-on-jdk17</id>
+      <activation>
+        <jdk>[17,21)</jdk>
+      </activation>
+      <properties>
+        <spotless.check.skip>true</spotless.check.skip>
+      </properties>
+    </profile>
     <!-- Chỉ bật khi release: ./mvnw -Prelease deploy -->
     <profile>
       <id>release</id>

@@ -10,7 +10,7 @@ Requires JDK 17+.
 ./mvnw verify
 ```
 
-Format code before committing:
+Format code before committing (google-java-format requires JDK 21+; the format check is skipped when building on JDK 17):
 
 ```bash
 ./mvnw spotless:apply
