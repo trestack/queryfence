@@ -67,7 +67,7 @@
     <gpg-plugin.version>3.2.7</gpg-plugin.version>
     <central-publishing-plugin.version>0.8.0</central-publishing-plugin.version>
     <spotless-plugin.version>2.44.5</spotless-plugin.version>
-    <jacoco-plugin.version>0.8.13</jacoco-plugin.version>
+    <jacoco-plugin.version>0.8.15</jacoco-plugin.version>
     <enforcer-plugin.version>3.6.1</enforcer-plugin.version>
   </properties>
 
