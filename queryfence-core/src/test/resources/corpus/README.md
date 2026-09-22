@@ -4,8 +4,8 @@ Data files of SQL statements and the violations QueryFence must report for them.
 the executable form of [docs/DESIGN.md](../../../../../docs/DESIGN.md): every case cites the clause
 it exercises, and a disagreement between a case and DESIGN.md is a bug in one of them.
 
-A parameterized test (Phase 1) will load every `*.yml` file in this directory except
-`policies.yml`, run each case through the rule engine and compare the result with `expect`.
+`GoldenCorpusTest` (a JUnit 5 parameterized test) loads every `*.yml` file in this directory except
+`policies.yml`, runs each case through the rule engine and compares the result with `expect`.
 
 ## Files
 

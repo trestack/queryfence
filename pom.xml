@@ -52,7 +52,7 @@
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 
     <!-- Dependencies (Dependabot proposes version bumps automatically) -->
-    <jsqlparser.version>5.3</jsqlparser.version>
+    <jsqlparser.version>5.4</jsqlparser.version>
     <datasource-proxy.version>1.11.0</datasource-proxy.version>
     <snakeyaml.version>2.4</snakeyaml.version>
     <junit.version>5.13.4</junit.version>

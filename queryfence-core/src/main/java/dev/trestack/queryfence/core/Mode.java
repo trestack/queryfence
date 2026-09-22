@@ -15,20 +15,8 @@
  */
 package dev.trestack.queryfence.core;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
-import net.sf.jsqlparser.parser.CCJSqlParserUtil;
-import net.sf.jsqlparser.statement.Statement;
-import net.sf.jsqlparser.statement.select.Select;
-import org.junit.jupiter.api.Test;
-
-/** Verifies the toolchain works end to end. Delete once real tests exist. */
-class SmokeTest {
-
-  @Test
-  void jsqlParserIsOnTheClasspath() throws Exception {
-    Statement statement =
-        CCJSqlParserUtil.parse("SELECT * FROM purchase_order WHERE tenant_id = ?");
-    assertThat(statement).isInstanceOf(Select.class);
-  }
+/** What to do with violations: fail the test, or only report them. */
+public enum Mode {
+  FAIL,
+  REPORT
 }
