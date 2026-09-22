@@ -1,0 +1,278 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>io.github.trestack</groupId>
+  <artifactId>queryfence-parent</artifactId>
+  <version>0.1.0-SNAPSHOT</version>
+  <packaging>pom</packaging>
+
+  <name>QueryFence</name>
+  <description>SQL policy testing for the JVM. Catch tenant leaks, unbounded updates and unsafe queries in your integration tests.</description>
+  <url>https://github.com/trestack/queryfence</url>
+  <inceptionYear>2026</inceptionYear>
+
+  <!-- ===== Metadata bắt buộc cho Maven Central ===== -->
+  <licenses>
+    <license>
+      <name>Apache License, Version 2.0</name>
+      <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+  <developers>
+    <developer>
+      <id>Nqvinh7603</id>
+      <name>Nguyen Quang Vinh</name>
+      <email>nqvinh7603@gmail.com</email>
+      <url>https://github.com/Nqvinh7603</url>
+    </developer>
+  </developers>
+
+  <modules>
+    <module>queryfence-bom</module>
+    <module>queryfence-core</module>
+    <module>queryfence-jdbc</module>
+    <module>queryfence-junit5</module>
+  </modules>
+  <scm>
+    <connection>scm:git:https://github.com/trestack/queryfence.git</connection>
+    <developerConnection>scm:git:ssh://git@github.com/trestack/queryfence.git</developerConnection>
+    <tag>HEAD</tag>
+    <url>https://github.com/trestack/queryfence</url>
+  </scm>
+  <issueManagement>
+    <system>GitHub Issues</system>
+    <url>https://github.com/trestack/queryfence/issues</url>
+  </issueManagement>
+
+  <properties>
+    <maven.compiler.release>17</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+
+    <!-- Dependencies (Dependabot sẽ tự đề xuất nâng version) -->
+    <jsqlparser.version>5.3</jsqlparser.version>
+    <datasource-proxy.version>1.11.0</datasource-proxy.version>
+    <snakeyaml.version>2.4</snakeyaml.version>
+    <junit.version>5.13.4</junit.version>
+    <assertj.version>3.27.4</assertj.version>
+
+    <!-- Plugins -->
+    <compiler-plugin.version>3.14.0</compiler-plugin.version>
+    <surefire-plugin.version>3.5.3</surefire-plugin.version>
+    <jar-plugin.version>3.4.2</jar-plugin.version>
+    <source-plugin.version>3.3.1</source-plugin.version>
+    <javadoc-plugin.version>3.11.2</javadoc-plugin.version>
+    <gpg-plugin.version>3.2.7</gpg-plugin.version>
+    <central-publishing-plugin.version>0.8.0</central-publishing-plugin.version>
+    <spotless-plugin.version>2.44.5</spotless-plugin.version>
+    <jacoco-plugin.version>0.8.13</jacoco-plugin.version>
+    <enforcer-plugin.version>3.6.1</enforcer-plugin.version>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>org.junit</groupId>
+        <artifactId>junit-bom</artifactId>
+        <version>${junit.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+      <dependency>
+        <groupId>com.github.jsqlparser</groupId>
+        <artifactId>jsqlparser</artifactId>
+        <version>${jsqlparser.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>net.ttddyy</groupId>
+        <artifactId>datasource-proxy</artifactId>
+        <version>${datasource-proxy.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.yaml</groupId>
+        <artifactId>snakeyaml</artifactId>
+        <version>${snakeyaml.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.assertj</groupId>
+        <artifactId>assertj-core</artifactId>
+        <version>${assertj.version}</version>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <build>
+    <pluginManagement>
+      <plugins>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-compiler-plugin</artifactId>
+          <version>${compiler-plugin.version}</version>
+          <configuration>
+            <compilerArgs>
+              <arg>-Xlint:all</arg>
+              <arg>-parameters</arg>
+            </compilerArgs>
+          </configuration>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-surefire-plugin</artifactId>
+          <version>${surefire-plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-jar-plugin</artifactId>
+          <version>${jar-plugin.version}</version>
+        </plugin>
+      </plugins>
+    </pluginManagement>
+
+    <plugins>
+      <!-- Chặn build nếu dùng Java/Maven quá cũ -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-enforcer-plugin</artifactId>
+        <version>${enforcer-plugin.version}</version>
+        <executions>
+          <execution>
+            <id>enforce</id>
+            <goals>
+              <goal>enforce</goal>
+            </goals>
+            <configuration>
+              <rules>
+                <requireJavaVersion>
+                  <version>[17,)</version>
+                </requireJavaVersion>
+                <requireMavenVersion>
+                  <version>[3.9,)</version>
+                </requireMavenVersion>
+                <dependencyConvergence/>
+              </rules>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- Format code thống nhất. Sửa tự động: ./mvnw spotless:apply -->
+      <plugin>
+        <groupId>com.diffplug.spotless</groupId>
+        <artifactId>spotless-maven-plugin</artifactId>
+        <version>${spotless-plugin.version}</version>
+        <configuration>
+          <java>
+            <googleJavaFormat/>
+            <removeUnusedImports/>
+            <licenseHeader>
+              <file>${maven.multiModuleProjectDirectory}/config/license-header.txt</file>
+            </licenseHeader>
+          </java>
+          <pom>
+            <sortPom>
+              <expandEmptyElements>false</expandEmptyElements>
+            </sortPom>
+          </pom>
+        </configuration>
+        <executions>
+          <execution>
+            <goals>
+              <goal>check</goal>
+            </goals>
+            <phase>verify</phase>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- Đo coverage -->
+      <plugin>
+        <groupId>org.jacoco</groupId>
+        <artifactId>jacoco-maven-plugin</artifactId>
+        <version>${jacoco-plugin.version}</version>
+        <executions>
+          <execution>
+            <goals>
+              <goal>prepare-agent</goal>
+            </goals>
+          </execution>
+          <execution>
+            <id>report</id>
+            <goals>
+              <goal>report</goal>
+            </goals>
+            <phase>verify</phase>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+
+  <profiles>
+    <!-- Chỉ bật khi release: ./mvnw -Prelease deploy -->
+    <profile>
+      <id>release</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-source-plugin</artifactId>
+            <version>${source-plugin.version}</version>
+            <executions>
+              <execution>
+                <id>attach-sources</id>
+                <goals>
+                  <goal>jar-no-fork</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-javadoc-plugin</artifactId>
+            <version>${javadoc-plugin.version}</version>
+            <executions>
+              <execution>
+                <id>attach-javadocs</id>
+                <goals>
+                  <goal>jar</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-gpg-plugin</artifactId>
+            <version>${gpg-plugin.version}</version>
+            <executions>
+              <execution>
+                <id>sign-artifacts</id>
+                <goals>
+                  <goal>sign</goal>
+                </goals>
+                <phase>verify</phase>
+                <configuration>
+                  <gpgArguments>
+                    <arg>--pinentry-mode</arg>
+                    <arg>loopback</arg>
+                  </gpgArguments>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.sonatype.central</groupId>
+            <artifactId>central-publishing-maven-plugin</artifactId>
+            <version>${central-publishing-plugin.version}</version>
+            <extensions>true</extensions>
+            <configuration>
+              <publishingServerId>central</publishingServerId>
+              <autoPublish>false</autoPublish>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
+</project>

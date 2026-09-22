@@ -1,0 +1,31 @@
+name: Bug report
+description: Something does not work as expected
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: sql
+    attributes:
+      label: SQL statement (anonymised)
+      render: sql
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      placeholder: QueryFence 0.1.0, Java 21, Hibernate 6.6, MySQL 8.4
+    validations:
+      required: true
+  - type: markdown
+    attributes:
+      value: "⚠️ If this SQL **bypasses** a rule, please report it privately via Security → Report a vulnerability instead."
