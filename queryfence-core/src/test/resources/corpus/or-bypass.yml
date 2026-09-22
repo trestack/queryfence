@@ -1,0 +1,26 @@
+cases:
+  - id: or-bypass-001
+    clause: [RP-3]
+    policy: default
+    sql: >-
+      SELECT o.id FROM purchase_order o WHERE o.tenant_id = ? OR 1 = 1
+    expect:
+      - {rule: tenant-isolation, code: MISSING_PREDICATE, table: purchase_order, alias: o}
+    reason: Under OR the tenant predicate is optional, and OR 1 = 1 returns every tenant's rows.
+
+  - id: or-bypass-002
+    clause: [RP-3]
+    policy: default
+    sql: >-
+      SELECT o.id FROM purchase_order o WHERE o.tenant_id = ? OR o.tenant_id = ?
+    expect:
+      - {rule: tenant-isolation, code: MISSING_PREDICATE, table: purchase_order, alias: o}
+    reason: Predicates under OR are never accepted, even when every branch restricts the tenant; IN (?, ?) is the accepted form.
+
+  - id: or-bypass-003
+    clause: [RP-3]
+    policy: default
+    sql: >-
+      SELECT o.id FROM purchase_order o WHERE o.tenant_id = ? AND (o.status = ? OR o.status = ?)
+    expect: []
+    reason: The OR is a separate conjunct; the tenant predicate itself sits in the top-level AND chain.

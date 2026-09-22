@@ -1,0 +1,27 @@
+cases:
+  - id: insert-001
+    clause: [RP-10]
+    policy: default
+    sql: >-
+      INSERT INTO purchase_order (id, tenant_id, status, total) VALUES (?, ?, ?, ?)
+    expect: []
+    reason: The tenant column is present in the explicit column list.
+
+  - id: insert-002
+    clause: [RP-10]
+    policy: default
+    sql: >-
+      INSERT INTO order_item (id, order_id, sku, price) VALUES (?, ?, ?, ?)
+    expect:
+      - {rule: tenant-isolation, code: MISSING_INSERT_COLUMN, table: order_item, alias: null}
+    reason: The row is inserted without a tenant_id, so no tenant can be proven to own it.
+
+  - id: insert-003
+    clause: [RP-10, RP-1]
+    policy: default
+    sql: >-
+      INSERT INTO invoice (id, tenant_id, order_id, amount)
+      SELECT ?, o.tenant_id, o.id, o.total FROM purchase_order o WHERE o.status = 'SHIPPED'
+    expect:
+      - {rule: tenant-isolation, code: MISSING_PREDICATE, table: purchase_order, alias: o}
+    reason: The target column list is fine, but the SELECT source reads purchase_order across all tenants.

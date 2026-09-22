@@ -1,0 +1,19 @@
+cases:
+  - id: cte-001
+    clause: [RP-8]
+    policy: default
+    sql: >-
+      WITH mine AS (SELECT id, status FROM purchase_order WHERE tenant_id = ?)
+      SELECT m.id FROM mine m WHERE m.status = ?
+    expect: []
+    reason: The CTE body fences purchase_order, and a reference to the CTE name is not an occurrence.
+
+  - id: cte-002
+    clause: [RP-8]
+    policy: default
+    sql: >-
+      WITH all_orders AS (SELECT id, tenant_id, status FROM purchase_order)
+      SELECT a.id FROM all_orders a WHERE a.tenant_id = ?
+    expect:
+      - {rule: tenant-isolation, code: MISSING_PREDICATE, table: purchase_order, alias: null}
+    reason: Filtering where the CTE is used does not fence the table inside its body.

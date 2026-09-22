@@ -1,0 +1,26 @@
+cases:
+  - id: basic-001
+    clause: [RP-1, RP-2, RP-4]
+    policy: default
+    sql: >-
+      SELECT id, status FROM purchase_order WHERE tenant_id = ?
+    expect: []
+    reason: A single-table query with an unqualified tenant predicate is unambiguous and fenced.
+
+  - id: basic-002
+    clause: [RP-1]
+    policy: default
+    sql: >-
+      SELECT o.id, o.total FROM purchase_order o WHERE o.status = ?
+    expect:
+      - {rule: tenant-isolation, code: MISSING_PREDICATE, table: purchase_order, alias: o}
+    reason: Filtering by status alone returns every tenant's orders (the README example).
+
+  - id: basic-003
+    clause: [RP-2]
+    policy: default
+    sql: >-
+      SELECT id FROM invoice WHERE tenant_id <> ? AND status = 'PAID'
+    expect:
+      - {rule: tenant-isolation, code: MISSING_PREDICATE, table: invoice, alias: null}
+    reason: An inequality selects every other tenant and is not an accepted predicate form.

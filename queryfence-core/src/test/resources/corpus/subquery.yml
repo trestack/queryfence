@@ -1,0 +1,39 @@
+cases:
+  - id: subquery-001
+    clause: [RP-6]
+    policy: default
+    sql: >-
+      SELECT o.id FROM purchase_order o WHERE o.tenant_id = ?
+      AND EXISTS (SELECT 1 FROM order_item i WHERE i.order_id = o.id AND i.tenant_id = ?)
+    expect: []
+    reason: The outer block and the EXISTS block each fence their own occurrence.
+
+  - id: subquery-002
+    clause: [RP-6]
+    policy: default
+    sql: >-
+      SELECT o.id FROM purchase_order o WHERE o.tenant_id = ?
+      AND o.id IN (SELECT i.order_id FROM order_item i WHERE i.sku = ?)
+    expect:
+      - {rule: tenant-isolation, code: MISSING_PREDICATE, table: order_item, alias: i}
+    reason: A subquery is its own block and the outer tenant predicate does not fence order_item inside it.
+
+  - id: subquery-003
+    clause: [RP-6]
+    policy: default
+    sql: >-
+      SELECT t.id, t.total FROM (SELECT id, total, tenant_id FROM purchase_order) t
+      WHERE t.tenant_id = ?
+    expect:
+      - {rule: tenant-isolation, code: MISSING_PREDICATE, table: purchase_order, alias: null}
+    reason: A filter applied outside a derived table does not fence the table inside it (no predicate pushdown in v0.1).
+
+  - id: subquery-004
+    clause: [RP-6]
+    policy: default
+    sql: >-
+      SELECT o.id, (SELECT COUNT(*) FROM invoice v WHERE v.order_id = o.id) AS invoice_count
+      FROM purchase_order o WHERE o.tenant_id = ?
+    expect:
+      - {rule: tenant-isolation, code: MISSING_PREDICATE, table: invoice, alias: v}
+    reason: A scalar subquery in the SELECT list is its own block and its invoice occurrence is unfenced.

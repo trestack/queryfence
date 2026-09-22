@@ -1,0 +1,59 @@
+cases:
+  - id: join-001
+    clause: [RP-1, RP-4]
+    policy: default
+    sql: >-
+      SELECT o.id, i.sku FROM purchase_order o JOIN order_item i ON i.order_id = o.id
+      WHERE o.tenant_id = ?
+    expect:
+      - {rule: tenant-isolation, code: MISSING_PREDICATE, table: order_item, alias: i}
+    reason: The tenant predicate is bound to o, so the joined order_item occurrence is unfenced.
+
+  - id: join-002
+    clause: [RP-1, RP-5]
+    policy: default
+    sql: >-
+      SELECT o.id, i.sku FROM purchase_order o JOIN order_item i ON i.order_id = o.id
+      WHERE o.tenant_id = ? AND i.tenant_id = ?
+    expect: []
+    reason: Both occurrences have their own tenant predicate in the WHERE AND chain.
+
+  - id: join-003
+    clause: [RP-5]
+    policy: default
+    sql: >-
+      SELECT o.id, c.rate FROM purchase_order o
+      JOIN currency c ON c.code = o.currency_code AND o.tenant_id = ?
+    expect: []
+    reason: An inner join's ON conditions filter like WHERE, so they may fence o; currency is unprotected.
+
+  - id: join-004
+    clause: [RP-1]
+    policy: default
+    sql: >-
+      SELECT o.id, p.id FROM purchase_order o JOIN purchase_order p ON p.parent_id = o.id
+      WHERE o.tenant_id = ?
+    expect:
+      - {rule: tenant-isolation, code: MISSING_PREDICATE, table: purchase_order, alias: p}
+    reason: A self-join has two occurrences and only o is fenced.
+
+  - id: join-005
+    clause: [RP-5]
+    policy: default
+    sql: >-
+      SELECT o.id, i.sku FROM purchase_order o
+      LEFT JOIN order_item i ON i.order_id = o.id AND i.tenant_id = ? AND o.tenant_id = ?
+    expect:
+      - {rule: tenant-isolation, code: MISSING_PREDICATE, table: purchase_order, alias: o}
+    reason: A LEFT JOIN condition does not remove rows of the preserved side, so o is unfenced while i is fenced.
+
+  - id: join-006
+    clause: [RP-2]
+    policy: default
+    sql: >-
+      SELECT o.id, i.sku FROM purchase_order o
+      JOIN order_item i ON i.order_id = o.id AND i.tenant_id = o.tenant_id
+      WHERE o.tenant_id = ?
+    expect:
+      - {rule: tenant-isolation, code: MISSING_PREDICATE, table: order_item, alias: i}
+    reason: Column-to-column equality is not an accepted predicate form in v0.1, even though it is transitively safe here.

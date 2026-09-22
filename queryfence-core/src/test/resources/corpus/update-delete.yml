@@ -1,0 +1,37 @@
+cases:
+  - id: update-delete-001
+    clause: [RP-9, UW-3]
+    policy: default
+    sql: >-
+      UPDATE purchase_order SET status = ? WHERE tenant_id = ? AND id = ?
+    expect: []
+    reason: The UPDATE target is fenced in the WHERE AND chain and the WHERE is not a tautology.
+
+  - id: update-delete-002
+    clause: [RP-9, UW-1]
+    policy: default
+    sql: >-
+      UPDATE purchase_order SET status = 'CLOSED'
+    expect:
+      - {rule: tenant-isolation, code: MISSING_PREDICATE, table: purchase_order, alias: null}
+      - {rule: no-unbounded-update, code: NO_WHERE, table: purchase_order, alias: null}
+    reason: An UPDATE without WHERE touches every row of every tenant and breaks both rules.
+
+  - id: update-delete-003
+    clause: [RP-9, DW-3]
+    policy: default
+    sql: >-
+      DELETE FROM purchase_order WHERE id = ?
+    expect:
+      - {rule: tenant-isolation, code: MISSING_PREDICATE, table: purchase_order, alias: null}
+    reason: Deleting by id alone lets one tenant delete another tenant's order by guessing its id.
+
+  - id: update-delete-004
+    clause: [RP-9, DW-2]
+    policy: default
+    sql: >-
+      DELETE FROM order_item WHERE 1 = 1
+    expect:
+      - {rule: tenant-isolation, code: MISSING_PREDICATE, table: order_item, alias: null}
+      - {rule: no-unbounded-delete, code: TAUTOLOGICAL_WHERE, table: order_item, alias: null}
+    reason: WHERE 1 = 1 is a tautology, so the DELETE is unbounded and unfenced.
