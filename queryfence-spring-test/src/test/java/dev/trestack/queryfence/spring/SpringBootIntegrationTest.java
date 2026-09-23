@@ -20,7 +20,8 @@ import static org.junit.platform.engine.discovery.DiscoverySelectors.selectClass
 
 import com.acme.shop.OrderRepository;
 import com.acme.shop.ShopApplication;
-import dev.trestack.queryfence.junit5.internal.RunReport;
+import dev.trestack.queryfence.report.Disabled;
+import dev.trestack.queryfence.report.RunReport;
 import java.nio.file.Path;
 import java.util.Optional;
 import javax.sql.DataSource;
@@ -70,6 +71,30 @@ class SpringBootIntegrationTest {
   }
 
   @Test
+  void usesThePolicyNamedByTheAnnotation() {
+    run(OtherPolicyCase.class).assertStatistics(stats -> stats.started(1).succeeded(1));
+
+    assertThat(RunReport.instance().results())
+        .singleElement()
+        .satisfies(
+            results -> {
+              assertThat(results.policy()).isEqualTo("queryfence-report-mode.yml");
+              assertThat(results.findings()).hasSize(1);
+            });
+  }
+
+  @Test
+  void canBeSwitchedOffWithALoudWarning() {
+    Disabled.reset();
+    try {
+      run(DisabledCase.class).assertStatistics(stats -> stats.started(1).succeeded(1));
+      assertThat(RunReport.instance().findings()).isEmpty();
+    } finally {
+      Disabled.reset();
+    }
+  }
+
+  @Test
   void wrapsEveryDataSourceBeanWithoutTestCode() {
     run(DataSourceBeanCase.class).assertStatistics(stats -> stats.started(1).succeeded(1));
   }
@@ -112,6 +137,29 @@ class SpringBootIntegrationTest {
     @Test
     void listsOrders() {
       assertThat(repository.findByTenantAndStatus(1L, "OPEN")).isEmpty();
+    }
+  }
+
+  @SpringBootTest(classes = ShopApplication.class)
+  @QueryFencePolicy("queryfence-report-mode.yml")
+  static class OtherPolicyCase {
+
+    @Autowired OrderRepository repository;
+
+    @Test
+    void listsOrders() {
+      repository.findByStatus(1L, "OPEN");
+    }
+  }
+
+  @SpringBootTest(classes = ShopApplication.class, properties = "queryfence.enabled=false")
+  static class DisabledCase {
+
+    @Autowired OrderRepository repository;
+
+    @Test
+    void listsOrders() {
+      repository.findByStatus(1L, "OPEN");
     }
   }
 

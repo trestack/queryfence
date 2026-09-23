@@ -17,8 +17,8 @@ package dev.trestack.queryfence.spring.internal;
 
 import dev.trestack.queryfence.core.Mode;
 import dev.trestack.queryfence.jdbc.QueryRecorder.Finding;
-import dev.trestack.queryfence.junit5.internal.Findings;
-import dev.trestack.queryfence.junit5.internal.RunReport;
+import dev.trestack.queryfence.report.Findings;
+import dev.trestack.queryfence.report.RunReport;
 import java.util.List;
 import org.springframework.beans.factory.NoSuchBeanDefinitionException;
 import org.springframework.test.context.TestContext;
@@ -54,7 +54,12 @@ public final class QueryFenceTestExecutionListener extends AbstractTestExecution
         testContext.getTestClass().getName() + "#" + testContext.getTestMethod().getName();
     RunReport.instance().registerShutdownHook();
     RunReport.instance()
-        .add(test, dataSources.policy().mode(), findings, dataSources.statementCount());
+        .add(
+            dataSources.policyName(),
+            dataSources.policy().mode(),
+            test,
+            findings,
+            dataSources.statementCount());
     dataSources.clear();
 
     if (findings.isEmpty() || dataSources.policy().mode() != Mode.FAIL) {

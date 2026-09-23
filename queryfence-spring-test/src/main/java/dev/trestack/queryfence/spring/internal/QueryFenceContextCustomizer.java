@@ -18,6 +18,7 @@ package dev.trestack.queryfence.spring.internal;
 import dev.trestack.queryfence.core.Policy;
 import dev.trestack.queryfence.jdbc.FencedDataSource;
 import dev.trestack.queryfence.jdbc.QueryFence;
+import dev.trestack.queryfence.report.Disabled;
 import java.util.Objects;
 import javax.sql.DataSource;
 import org.springframework.beans.factory.config.BeanPostProcessor;
@@ -39,7 +40,11 @@ final class QueryFenceContextCustomizer implements ContextCustomizer {
   @Override
   public void customizeContext(
       ConfigurableApplicationContext context, MergedContextConfiguration mergedConfig) {
-    FencedDataSources dataSources = new FencedDataSources(policy);
+    if (!context.getEnvironment().getProperty(Disabled.PROPERTY, Boolean.class, Boolean.TRUE)) {
+      Disabled.announce("this Spring test context");
+      return;
+    }
+    FencedDataSources dataSources = new FencedDataSources(policy, resource);
     context.getBeanFactory().registerSingleton(FencedDataSources.BEAN_NAME, dataSources);
     context.getBeanFactory().addBeanPostProcessor(new WrappingBeanPostProcessor(dataSources));
   }

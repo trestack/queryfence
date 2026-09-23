@@ -21,8 +21,9 @@ import dev.trestack.queryfence.jdbc.CaptureSettings;
 import dev.trestack.queryfence.jdbc.FencedDataSource;
 import dev.trestack.queryfence.jdbc.QueryFence;
 import dev.trestack.queryfence.jdbc.QueryRecorder.Finding;
-import dev.trestack.queryfence.junit5.internal.Findings;
-import dev.trestack.queryfence.junit5.internal.RunReport;
+import dev.trestack.queryfence.report.Disabled;
+import dev.trestack.queryfence.report.Findings;
+import dev.trestack.queryfence.report.RunReport;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -52,24 +53,30 @@ import org.junit.jupiter.api.extension.ExtensionContext;
 public final class QueryFenceExtension
     implements BeforeTestExecutionCallback, AfterTestExecutionCallback {
 
+  /** How the report names this policy: the resource it came from, or that it was built in Java. */
+  private static final String INLINE_POLICY = "policy built in Java";
+
   private final Policy policy;
+  private final String policyName;
   private final CaptureSettings captureSettings;
   private final List<FencedDataSource> dataSources = new CopyOnWriteArrayList<>();
 
-  private QueryFenceExtension(Policy policy, CaptureSettings captureSettings) {
+  private QueryFenceExtension(Policy policy, String policyName, CaptureSettings captureSettings) {
     this.policy = Objects.requireNonNull(policy, "policy");
+    this.policyName = Objects.requireNonNull(policyName, "policyName");
     this.captureSettings = Objects.requireNonNull(captureSettings, "captureSettings");
     RunReport.instance().registerShutdownHook();
   }
 
   /** Loads {@value PolicyFile#DEFAULT_RESOURCE} from the classpath. */
   public static QueryFenceExtension fromClasspath() {
-    return of(PolicyFile.fromClasspath());
+    return fromClasspath(PolicyFile.DEFAULT_RESOURCE);
   }
 
   /** Loads a policy from the classpath. */
   public static QueryFenceExtension fromClasspath(String resource) {
-    return of(PolicyFile.fromClasspath(resource));
+    return new QueryFenceExtension(
+        PolicyFile.fromClasspath(resource), resource, CaptureSettings.defaults());
   }
 
   /** Uses a policy built in Java. */
@@ -79,14 +86,26 @@ public final class QueryFenceExtension
 
   /** Uses a policy built in Java, with explicit origin resolution settings. */
   public static QueryFenceExtension of(Policy policy, CaptureSettings captureSettings) {
-    return new QueryFenceExtension(policy, captureSettings);
+    return new QueryFenceExtension(policy, INLINE_POLICY, captureSettings);
   }
 
-  /** Wraps a data source so the statements the test executes through it are checked. */
+  /**
+   * Wraps a data source so the statements the test executes through it are checked. When {@code
+   * -Dqueryfence.enabled=false} is set, the data source is returned unchanged and a warning is
+   * printed.
+   */
   public DataSource wrap(DataSource dataSource) {
+    if (!enabled()) {
+      Disabled.announce("the JUnit extension of " + policyName);
+      return dataSource;
+    }
     FencedDataSource fenced = QueryFence.wrap(dataSource, policy, captureSettings);
     dataSources.add(fenced);
     return fenced;
+  }
+
+  private static boolean enabled() {
+    return !"false".equalsIgnoreCase(System.getProperty(Disabled.PROPERTY));
   }
 
   public Policy policy() {
@@ -108,7 +127,7 @@ public final class QueryFenceExtension
       dataSource.recorder().clear();
     }
     String test = testId(context);
-    RunReport.instance().add(test, policy.mode(), findings, statements);
+    RunReport.instance().add(policyName, policy.mode(), test, findings, statements);
 
     if (!findings.isEmpty() && policy.mode() == Mode.FAIL) {
       throw new AssertionError(

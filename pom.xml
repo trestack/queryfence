@@ -33,6 +33,7 @@
     <module>queryfence-bom</module>
     <module>queryfence-core</module>
     <module>queryfence-jdbc</module>
+    <module>queryfence-report</module>
     <module>queryfence-junit5</module>
     <module>queryfence-spring-test</module>
   </modules>
@@ -59,7 +60,10 @@
     <h2.version>2.5.250</h2.version>
     <spring.version>6.2.19</spring.version>
     <spring-boot.version>3.5.9</spring-boot.version>
-    <junit.version>5.13.4</junit.version>
+    <!-- The oldest JUnit we support (Spring Boot 3.3). Building against the floor makes reaching
+         for a newer API a compile error instead of a runtime surprise for those users; CI also
+         runs the JUnit and Spring modules against the latest 5.x and 6.x. -->
+    <junit.version>5.10.5</junit.version>
     <assertj.version>3.27.4</assertj.version>
 
     <!-- Plugins -->

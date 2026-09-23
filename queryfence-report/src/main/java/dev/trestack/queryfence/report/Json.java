@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package dev.trestack.queryfence.junit5.internal;
+package dev.trestack.queryfence.report;
 
 import java.util.ArrayDeque;
 import java.util.Deque;

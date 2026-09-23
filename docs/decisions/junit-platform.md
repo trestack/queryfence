@@ -1,6 +1,8 @@
 # Which JUnit does `queryfence-junit5` target?
 
-**Status: proposed, waiting for the maintainer's decision.**
+**Status: decided on 2026-09-23 — option A.** QueryFence builds against JUnit 5.10.5 and CI runs
+the JUnit and Spring modules against 5.13.4 and against 6.1.3 with Spring Boot 4. The README says
+what is tested and promises nothing about Spring Boot 4 until someone runs it in anger.
 
 The JUnit version QueryFence compiles against is part of the contract with its users: it sets the
 oldest JUnit they may run. This note collects the constraints and the measurements, and proposes
@@ -73,10 +75,7 @@ rule people have to remember into a compile error, and the matrix proves the pro
 
 Option D becomes worth it only if the two majors ever need different code; today they do not.
 
-## Open questions for the maintainer
+## Follow-ups
 
-1. How far back should 0.1 support: Spring Boot 3.3 (JUnit 5.10), or only 3.4+?
-2. Do we advertise JUnit 6 / Spring Boot 4 support in the README for 0.1, given it is tested but
-   not yet used in anger?
-3. Spring Framework 7 keeps `spring.factories` for test infrastructure today. If that changes, the
+1. Spring Framework 7 keeps `spring.factories` for test infrastructure today. If that changes, the
    Spring module needs a second registration mechanism — worth a note in the release checklist.

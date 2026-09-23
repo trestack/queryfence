@@ -29,14 +29,21 @@ public final class FencedDataSources {
   public static final String BEAN_NAME = "queryFenceDataSources";
 
   private final Policy policy;
+  private final String policyName;
   private final List<FencedDataSource> dataSources = new CopyOnWriteArrayList<>();
 
-  FencedDataSources(Policy policy) {
+  FencedDataSources(Policy policy, String policyName) {
     this.policy = policy;
+    this.policyName = policyName;
   }
 
   public Policy policy() {
     return policy;
+  }
+
+  /** How the report names this policy: the resource it was loaded from. */
+  public String policyName() {
+    return policyName;
   }
 
   void add(FencedDataSource dataSource) {

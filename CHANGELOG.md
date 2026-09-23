@@ -21,3 +21,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   of the run and writes `target/queryfence/report.json`.
 - `queryfence-spring-test`: every `DataSource` bean of a Spring test context is wrapped
   automatically; adding the dependency and a `queryfence.yml` is the whole setup.
+- `queryfence-report` holds the run report; `queryfence-junit5` and `queryfence-spring-test` share
+  it. The console summary and `report.json` are grouped per policy, each with its own mode.
+- `@QueryFencePolicy("other.yml")` selects another policy file for a Spring test class, and
+  `queryfence.enabled=false` switches the checks off for a run, with a loud warning.

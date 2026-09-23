@@ -19,7 +19,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.platform.engine.discovery.DiscoverySelectors.selectClass;
 
 import com.acme.orders.OrderRepository;
-import dev.trestack.queryfence.junit5.internal.RunReport;
+import dev.trestack.queryfence.report.Disabled;
+import dev.trestack.queryfence.report.RunReport;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -81,6 +82,32 @@ class ExtensionBehaviourTest {
   }
 
   @Test
+  void groupsTheReportByPolicy() {
+    run(LeakingCase.class);
+    run(ReportModeCase.class);
+
+    assertThat(RunReport.instance().results())
+        .extracting(results -> results.policy() + "/" + results.mode())
+        .containsExactly("queryfence.yml/FAIL", "queryfence-report-mode.yml/REPORT");
+    assertThat(RunReport.instance().summary())
+        .contains("QueryFence [queryfence.yml, mode FAIL]: 1 violation")
+        .contains("QueryFence [queryfence-report-mode.yml, mode REPORT]: 1 violation");
+  }
+
+  @Test
+  void canBeSwitchedOffWithALoudWarning() {
+    System.setProperty("queryfence.enabled", "false");
+    Disabled.reset();
+    try {
+      run(LeakingCase.class).assertStatistics(stats -> stats.started(1).succeeded(1));
+      assertThat(RunReport.instance().findings()).isEmpty();
+    } finally {
+      System.clearProperty("queryfence.enabled");
+      Disabled.reset();
+    }
+  }
+
+  @Test
   void appliesSuppressionsFromThePolicyFile() {
     run(SuppressedCase.class).assertStatistics(stats -> stats.started(1).succeeded(1));
 
@@ -94,7 +121,8 @@ class ExtensionBehaviourTest {
 
     String json = Files.readString(reportDirectory.resolve("report.json"));
     assertThat(json)
-        .contains("\"modes\":[\"FAIL\"]")
+        .contains("\"policy\":\"queryfence.yml\"")
+        .contains("\"mode\":\"FAIL\"")
         .contains("\"tests\":1")
         .contains("\"findings\":1")
         .contains("\"code\":\"MISSING_PREDICATE\"")
@@ -109,8 +137,8 @@ class ExtensionBehaviourTest {
     run(FencedCase.class);
 
     assertThat(RunReport.instance().summary())
-        .contains("QueryFence: 0 violations in 1 test")
-        .contains("1 statements checked, mode FAIL");
+        .contains("QueryFence [queryfence.yml, mode FAIL]: 0 violations in 1 test")
+        .contains("1 statements checked");
   }
 
   private static Events run(Class<?> testClass) {
