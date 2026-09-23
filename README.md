@@ -84,7 +84,13 @@ QueryFence is not fooled by predicates that look right but protect nothing:
 ... FROM purchase_order o JOIN order_item i ON i.order_id = o.id WHERE o.tenant_id = ?
 ```
 
-See [docs/DESIGN.md](docs/DESIGN.md) for the exact rule semantics and the known bypasses it blocks.
+It also names the shapes an ORM produces. `findById` and `EntityManager.find` generate
+`... where id = ?`, and a primary key is not a tenant filter, so that is reported as
+`PRIMARY_KEY_LOOKUP` with a different fix: `findByIdAndTenantId`, or the tenant mapped on the
+entity.
+
+See [docs/DESIGN.md](docs/DESIGN.md) for the exact rule semantics and the known bypasses it blocks,
+and [docs/ADOPTION.md](docs/ADOPTION.md) for putting it into a project that already exists.
 
 ## Installation
 
@@ -273,6 +279,14 @@ path can quietly fall outside it. QueryFence shows, in CI, whether every query y
 fenced, whichever layer does the fencing. If you rely only on RLS, a `REPORT`-mode run also tells you
 which queries depend on it.
 
+**Hibernate enforces, QueryFence verifies.** The two fit together best when the tenant is mapped on
+the entities with Hibernate `@TenantId`: Hibernate then adds the tenant condition to every load,
+including lazy associations and fetch joins, and QueryFence confirms — against the SQL that really
+ran — that it did. Without that mapping, children loaded by foreign key
+(`select ... from order_item where order_id = ?`) are reported, because the statement alone does
+not prove the parent was fenced. The cheaper fallback is to protect only the aggregate root in the
+policy, and its price is explicit: the child table is then never checked.
+
 TenantLayer and QueryFence both test isolation, but from opposite directions:
 
 - **TenantLayer tests scenarios you write.** "As tenant A, I cannot see tenant B's invoice." Each test
@@ -290,6 +304,15 @@ Honest limits of QueryFence:
 - It only sees SQL that your tests execute. Untested code paths are unchecked.
 - It checks that a tenant predicate exists, not that the bound value is the *current* tenant.
 - It is a test-time tool. It does not protect production if tests are skipped.
+
+## Documentation
+
+| | |
+|---|---|
+| [Getting started, rules, configuration](https://trestack.github.io/queryfence/) | the documentation site |
+| [docs/ADOPTION.md](docs/ADOPTION.md) | putting QueryFence into an existing project, in REPORT mode |
+| [docs/DESIGN.md](docs/DESIGN.md) | exact rule semantics, known bypasses and limits |
+| [tools/queryfence-summary.py](tools/queryfence-summary.py) | summarises `report.json` by rule, table, code and origin |
 
 ## Status and roadmap
 

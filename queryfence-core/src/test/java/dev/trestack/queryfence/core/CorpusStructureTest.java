@@ -93,7 +93,7 @@ class CorpusStructureTest {
         assertThat(e.message()).as("message of %s", c.id()).isNotBlank();
         assertThat(e.message())
             .as("message of %s must say how to fix the violation", c.id())
-            .containsAnyOf("Add ", "Replace ", "Qualify ", "Rewrite ", "Report ");
+            .containsAnyOf("Add ", "Replace ", "Qualify ", "Rewrite ", "Report ", "Filter ");
       }
     }
   }
@@ -110,6 +110,7 @@ class CorpusStructureTest {
         .containsExactlyInAnyOrderElementsOf(
             Set.of(
                 Violation.Code.MISSING_PREDICATE.name(),
+                Violation.Code.PRIMARY_KEY_LOOKUP.name(),
                 Violation.Code.AMBIGUOUS_COLUMN.name(),
                 Violation.Code.MISSING_INSERT_COLUMN.name(),
                 Violation.Code.NO_WHERE.name(),

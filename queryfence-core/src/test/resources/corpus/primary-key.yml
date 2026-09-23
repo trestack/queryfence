@@ -1,0 +1,113 @@
+cases:
+  - id: primary-key-001
+    clause: [RP-14]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT id, total FROM purchase_order WHERE id = ?
+    expect:
+      - rule: tenant-isolation
+        code: PRIMARY_KEY_LOOKUP
+        table: purchase_order
+        alias: null
+        message: 'purchase_order is looked up by id only, and ids are easy to guess. Filter by tenant as well (findByIdAndTenantId(...) in Spring Data), or map the tenant on the entity (Hibernate @TenantId) so every load carries it.'
+    reason: 'A primary key is not a tenant filter: any tenant can guess an id.'
+
+  - id: primary-key-002
+    clause: [RP-14]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id FROM purchase_order o WHERE o.id = ?
+    expect:
+      - rule: tenant-isolation
+        code: PRIMARY_KEY_LOOKUP
+        table: purchase_order
+        alias: o
+        message: 'purchase_order (o) is looked up by id only, and ids are easy to guess. Filter by tenant as well (findByIdAndTenantId(...) in Spring Data), or map the tenant on the entity (Hibernate @TenantId) so every load carries it.'
+    reason: 'The same lookup through an alias.'
+
+  - id: primary-key-003
+    clause: [RP-14]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT id FROM purchase_order WHERE id IN (?, ?)
+    expect:
+      - rule: tenant-isolation
+        code: PRIMARY_KEY_LOOKUP
+        table: purchase_order
+        alias: null
+        message: 'purchase_order is looked up by id only, and ids are easy to guess. Filter by tenant as well (findByIdAndTenantId(...) in Spring Data), or map the tenant on the entity (Hibernate @TenantId) so every load carries it.'
+    reason: 'A list of ids is still a list of ids.'
+
+  - id: primary-key-004
+    clause: [RP-14, RP-2]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT id FROM purchase_order WHERE id = ? AND tenant_id = ?
+    expect: []
+    reason: 'With the tenant filter next to it, the lookup is fenced and nothing is reported.'
+
+  - id: primary-key-005
+    clause: [RP-14, RP-4]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT id FROM purchase_order WHERE id = ? OR status = ?
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: null
+        message: 'purchase_order has no tenant filter. Add "purchase_order.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'Under OR the id does not even narrow the query, so this is an ordinary missing predicate.'
+
+  - id: primary-key-006
+    clause: [RP-14, RP-1]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id, i.sku FROM purchase_order o JOIN order_item i ON i.order_id = o.id
+      WHERE o.id = ?
+    expect:
+      - rule: tenant-isolation
+        code: PRIMARY_KEY_LOOKUP
+        table: purchase_order
+        alias: o
+        message: 'purchase_order (o) is looked up by id only, and ids are easy to guess. Filter by tenant as well (findByIdAndTenantId(...) in Spring Data), or map the tenant on the entity (Hibernate @TenantId) so every load carries it.'
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: order_item
+        alias: i
+        message: 'order_item (i) has no tenant filter. Add "i.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'Each occurrence is reported with the message that fits it.'
+
+  - id: primary-key-007
+    clause: [RP-14, RP-10]
+    policy: default
+    dialect: ansi
+    sql: |-
+      UPDATE purchase_order SET status = ? WHERE id = ?
+    expect:
+      - rule: tenant-isolation
+        code: PRIMARY_KEY_LOOKUP
+        table: purchase_order
+        alias: null
+        message: 'purchase_order is looked up by id only, and ids are easy to guess. Filter by tenant as well (findByIdAndTenantId(...) in Spring Data), or map the tenant on the entity (Hibernate @TenantId) so every load carries it.'
+    reason: 'Writes by primary key have the same problem as reads.'
+
+  - id: primary-key-008
+    clause: [RP-14]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT id FROM purchase_order WHERE order_ref = ?
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: null
+        message: 'purchase_order has no tenant filter. Add "purchase_order.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'Another unique-looking column is not the primary key the rule knows about.'

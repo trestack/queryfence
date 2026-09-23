@@ -94,7 +94,8 @@ final class Corpus {
                 id,
                 (String) rule.get("column"),
                 strings(rule.get("tables")),
-                strings(rule.getOrDefault("allowedFunctions", List.of())));
+                strings(rule.getOrDefault("allowedFunctions", List.of())),
+                (String) rule.getOrDefault("primaryKey", "id"));
         case "update-without-where" -> builder.updateWithoutWhere(id);
         case "delete-without-where" -> builder.deleteWithoutWhere(id);
         default -> throw new IllegalArgumentException("Unknown rule type in " + rule);

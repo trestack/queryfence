@@ -46,6 +46,33 @@ final class Messages {
         + " = ?\" to that branch.";
   }
 
+  static String primaryKeyLookup(String table, String alias, String column, String primaryKey) {
+    return display(table, alias)
+        + " is looked up by "
+        + primaryKey
+        + " only, and ids are easy to guess. Filter by tenant as well (findBy"
+        + camelCase(primaryKey)
+        + "And"
+        + camelCase(column)
+        + "(...) in Spring Data), or map the tenant on the entity (Hibernate @TenantId) so every"
+        + " load carries it.";
+  }
+
+  /** {@code tenant_id} becomes {@code TenantId}, for the method name in the hint. */
+  private static String camelCase(String column) {
+    StringBuilder sb = new StringBuilder();
+    boolean upper = true;
+    for (char c : column.toCharArray()) {
+      if (c == '_') {
+        upper = true;
+      } else {
+        sb.append(upper ? Character.toUpperCase(c) : c);
+        upper = false;
+      }
+    }
+    return sb.toString();
+  }
+
   static String ambiguousColumn(List<String> tables, String exampleRef, String column) {
     return "Column \""
         + column

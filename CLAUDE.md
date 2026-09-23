@@ -150,6 +150,16 @@ parameter value checks, custom rule DSL, UI.
 - No AI attribution trailers (`Co-Authored-By: Claude`, "Generated with Claude Code") in commits
   or PR descriptions.
 
+## Docs and adoption
+
+- Documentation site: MkDocs Material, `mkdocs.yml` + `docs/`, deployed to
+  `trestack.github.io/queryfence` by `.github/workflows/docs.yml` on every push to `main`.
+  `docs/llms.txt` is the summary for AI agents and must stay in sync with the rules.
+- `docs/ADOPTION.md` is the REPORT-mode path into an existing project;
+  `tools/queryfence-summary.py` summarises `report.json` (no dependencies).
+- `examples/` must keep failing: `examples/verify-examples.sh` asserts each example's build fails
+  *because of QueryFence*, and CI runs it in the integration job.
+
 ## Security — never do these
 
 - Never read, print, create or commit GPG keys, passphrases, Central Portal tokens or any

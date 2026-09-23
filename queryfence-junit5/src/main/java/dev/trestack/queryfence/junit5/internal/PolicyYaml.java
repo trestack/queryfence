@@ -17,6 +17,7 @@ package dev.trestack.queryfence.junit5.internal;
 
 import dev.trestack.queryfence.core.Mode;
 import dev.trestack.queryfence.core.Policy;
+import dev.trestack.queryfence.core.internal.RequirePredicateRule;
 import java.io.InputStream;
 import java.util.List;
 import java.util.Map;
@@ -35,7 +36,7 @@ public final class PolicyYaml {
   private static final Set<String> ROOT_KEYS =
       Set.of("version", "mode", "onUnparseable", "rules", "suppressions");
   private static final Set<String> RULE_KEYS =
-      Set.of("id", "type", "column", "tables", "allowedFunctions");
+      Set.of("id", "type", "column", "tables", "allowedFunctions", "primaryKey");
   private static final Set<String> SUPPRESSION_KEYS = Set.of("rule", "origin", "reason");
 
   private final String resource;
@@ -110,7 +111,10 @@ public final class PolicyYaml {
               strings(tables, "tables of rule '" + id + "'"),
               rule.get("allowedFunctions") == null
                   ? List.of()
-                  : strings(rule.get("allowedFunctions"), "allowedFunctions of rule '" + id + "'"));
+                  : strings(rule.get("allowedFunctions"), "allowedFunctions of rule '" + id + "'"),
+              rule.get("primaryKey") == null
+                  ? RequirePredicateRule.DEFAULT_PRIMARY_KEY
+                  : required(rule, "primaryKey", "rule '" + id + "'"));
         }
         case "update-without-where" -> builder.updateWithoutWhere(id);
         case "delete-without-where" -> builder.deleteWithoutWhere(id);

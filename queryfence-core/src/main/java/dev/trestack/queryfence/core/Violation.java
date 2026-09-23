@@ -38,6 +38,7 @@ public record Violation(
   /** Violation codes, see {@code docs/DESIGN.md} "Violation model". */
   public enum Code {
     MISSING_PREDICATE,
+    PRIMARY_KEY_LOOKUP,
     AMBIGUOUS_COLUMN,
     MISSING_INSERT_COLUMN,
     NO_WHERE,

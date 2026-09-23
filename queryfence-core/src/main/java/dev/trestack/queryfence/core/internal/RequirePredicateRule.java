@@ -24,16 +24,32 @@ import java.util.stream.Collectors;
 
 /** {@code require-predicate}: every occurrence of a protected table must be fenced. */
 public record RequirePredicateRule(
-    String id, String column, List<TableName> tables, Set<String> allowedFunctions)
+    String id,
+    String column,
+    List<TableName> tables,
+    Set<String> allowedFunctions,
+    String primaryKey)
     implements Rule {
 
   public static final String TYPE = "require-predicate";
+
+  /** Column name a row is usually looked up by when no tenant is involved. */
+  public static final String DEFAULT_PRIMARY_KEY = "id";
 
   /** A {@code tables} entry; {@code schema} is {@code null} when the entry has none. */
   public record TableName(String schema, String name) {}
 
   public static RequirePredicateRule of(
       String id, String column, Collection<String> tables, Collection<String> allowedFunctions) {
+    return of(id, column, tables, allowedFunctions, DEFAULT_PRIMARY_KEY);
+  }
+
+  public static RequirePredicateRule of(
+      String id,
+      String column,
+      Collection<String> tables,
+      Collection<String> allowedFunctions,
+      String primaryKey) {
     requireNonBlank(id, "Rule id");
     requireNonBlank(column, "Rule '" + id + "' column");
     Objects.requireNonNull(tables, "tables");
@@ -59,7 +75,9 @@ public record RequirePredicateRule(
             : allowedFunctions.stream()
                 .map(Names::normalize)
                 .collect(Collectors.toUnmodifiableSet());
-    return new RequirePredicateRule(id, Names.normalize(column), names, functions);
+    requireNonBlank(primaryKey, "Rule '" + id + "' primaryKey");
+    return new RequirePredicateRule(
+        id, Names.normalize(column), names, functions, Names.normalize(primaryKey));
   }
 
   @Override
