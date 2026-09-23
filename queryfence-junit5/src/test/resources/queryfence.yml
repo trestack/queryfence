@@ -1,0 +1,12 @@
+version: 1
+mode: FAIL
+onUnparseable: FAIL
+
+rules:
+  - id: tenant-isolation
+    type: require-predicate
+    column: tenant_id
+    tables: [purchase_order]
+
+  - id: no-unbounded-update
+    type: update-without-where
