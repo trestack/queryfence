@@ -21,6 +21,8 @@ import static org.junit.jupiter.api.Assumptions.assumeFalse;
 
 import dev.trestack.queryfence.core.Corpus.Case;
 import dev.trestack.queryfence.core.TenantPredicates.Mutation;
+import dev.trestack.queryfence.core.TenantPredicates.Transformation;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Named;
@@ -30,18 +32,25 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 /**
- * Metamorphic relation: a statement that passes must stop passing as soon as any one of its tenant
- * predicates (or its INSERT tenant column) is removed. A passing case that survives the removal is
- * either a hole in the engine or a case that never protected anything.
+ * Metamorphic relations: a statement QueryFence accepts must stop being accepted as soon as its
+ * tenant protection is weakened, however the weakening is written. Each {@link Transformation} is a
+ * bypass a developer could write by accident; a passing case that survives one is an engine hole.
  */
 class MetamorphicTest {
 
   private static final String COLUMN = "tenant_id";
 
-  static Stream<Arguments> passingCases() {
-    return Corpus.cases().stream()
-        .filter(c -> c.expect().isEmpty())
-        .map(c -> Arguments.of(Named.of(c.id(), c)));
+  static Stream<Arguments> passingCasesAndTransformations() {
+    List<Arguments> arguments = new ArrayList<>();
+    for (Case c : Corpus.cases()) {
+      if (!c.expect().isEmpty()) {
+        continue;
+      }
+      for (Transformation transformation : Transformation.values()) {
+        arguments.add(Arguments.of(Named.of(c.id() + " / " + transformation, c), transformation));
+      }
+    }
+    return arguments.stream();
   }
 
   static Stream<Arguments> allCases() {
@@ -49,17 +58,18 @@ class MetamorphicTest {
   }
 
   @ParameterizedTest(name = "{0}")
-  @MethodSource("passingCases")
-  void removingAnyTenantPredicateProducesAViolation(Case c) {
-    List<Mutation> mutations = TenantPredicates.removeOneByOne(c.sql(), COLUMN);
-    assumeFalse(mutations.isEmpty(), "case has no tenant predicate to remove");
+  @MethodSource("passingCasesAndTransformations")
+  void weakeningATenantPredicateProducesAViolation(Case c, Transformation transformation) {
+    List<Mutation> mutations = TenantPredicates.mutations(c.sql(), COLUMN, transformation);
+    assumeFalse(
+        mutations.isEmpty(), transformation + " does not apply to any predicate of " + c.id());
 
     SqlChecker checker = GoldenCorpusTest.checker(c);
     for (Mutation mutation : mutations) {
       assertThat(checker.check(mutation.sql()))
           .as(
-              "%s: removing %s must be caught%n  before: %s%n  after : %s",
-              c.id(), mutation.description(), c.sql(), mutation.sql())
+              "%s: %s (%s) must be caught%n  before: %s%n  after : %s",
+              c.id(), mutation.transformation(), mutation.description(), c.sql(), mutation.sql())
           .isNotEmpty();
     }
   }
@@ -68,10 +78,24 @@ class MetamorphicTest {
   @MethodSource("allCases")
   void mutatedStatementsNeverMakeTheEngineThrow(Case c) {
     SqlChecker checker = GoldenCorpusTest.checker(c);
-    for (Mutation mutation : TenantPredicates.removeOneByOne(c.sql(), COLUMN)) {
+    for (Mutation mutation : TenantPredicates.mutations(c.sql(), COLUMN)) {
       assertThatCode(() -> checker.check(mutation.sql()))
           .as("%s: %s", c.id(), mutation.sql())
           .doesNotThrowAnyException();
+    }
+  }
+
+  @Test
+  void everyTransformationAppliesToSeveralPassingCases() {
+    for (Transformation transformation : Transformation.values()) {
+      long cases =
+          Corpus.cases().stream()
+              .filter(c -> c.expect().isEmpty())
+              .filter(c -> !TenantPredicates.mutations(c.sql(), COLUMN, transformation).isEmpty())
+              .count();
+      assertThat(cases)
+          .as("passing cases that %s can weaken", transformation)
+          .isGreaterThanOrEqualTo(5);
     }
   }
 
@@ -80,7 +104,7 @@ class MetamorphicTest {
     List<Case> passing = Corpus.cases().stream().filter(c -> c.expect().isEmpty()).toList();
     List<String> withoutPredicate =
         passing.stream()
-            .filter(c -> TenantPredicates.removeOneByOne(c.sql(), COLUMN).isEmpty())
+            .filter(c -> TenantPredicates.mutations(c.sql(), COLUMN).isEmpty())
             .map(Case::id)
             .toList();
 
