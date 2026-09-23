@@ -69,7 +69,7 @@
          for a newer API a compile error instead of a runtime surprise for those users; CI also
          runs the JUnit and Spring modules against the latest 5.x and 6.x. -->
     <junit.version>5.10.5</junit.version>
-    <assertj.version>3.27.4</assertj.version>
+    <assertj.version>3.27.7</assertj.version>
 
     <!-- Plugins -->
     <compiler-plugin.version>3.14.0</compiler-plugin.version>
