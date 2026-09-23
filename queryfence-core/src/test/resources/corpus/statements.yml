@@ -1,0 +1,168 @@
+cases:
+  - id: statements-001
+    clause: [RP-13]
+    policy: default
+    dialect: ansi
+    sql: |-
+      TRUNCATE TABLE purchase_order
+    expect: []
+    reason: 'TRUNCATE is DDL and ignored by every rule, because test fixtures routinely truncate tables.'
+
+  - id: statements-002
+    clause: [RP-13]
+    policy: default
+    dialect: ansi
+    sql: |-
+      CREATE TABLE purchase_order (id BIGINT, tenant_id BIGINT)
+    expect: []
+    reason: 'DDL carries no tenant data and is ignored.'
+
+  - id: statements-003
+    clause: [RP-13]
+    policy: default
+    dialect: ansi
+    sql: |-
+      CALL rebuild_order_index(?)
+    expect: []
+    reason: 'Stored procedure calls are opaque and ignored in v0.1.'
+
+  - id: statements-004
+    clause: [RP-13]
+    policy: default
+    dialect: ansi
+    sql: |-
+      MERGE INTO purchase_order o USING staging s ON (o.id = s.id)
+      WHEN MATCHED THEN UPDATE SET o.status = s.status
+    expect:
+      - rule: tenant-isolation
+        code: UNSUPPORTED_STATEMENT
+        table: purchase_order
+        alias: o
+        message: 'MERGE statements on purchase_order (o) are not analysed yet. Rewrite the statement as INSERT or UPDATE, or suppress its origin with a reason.'
+    reason: 'MERGE is not analysed yet, so it is reported instead of being silently accepted.'
+
+  - id: statements-005
+    clause: [RP-13]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT id FROM purchase_order WHERE tenant_id = ?; DELETE FROM invoice
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: invoice
+        alias: null
+        message: 'invoice has no tenant filter. Add "invoice.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+      - rule: no-unbounded-delete
+        code: NO_WHERE
+        table: invoice
+        alias: null
+        message: 'DELETE from invoice has no WHERE clause and removes every row. Add a WHERE clause that selects only the intended rows.'
+    reason: 'Each statement of a multi-statement string is checked on its own.'
+
+  - id: statements-006
+    clause: [RP-13]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT id FROM purchase_order WHERE tenant_id = ?; DELETE FROM invoice WHERE tenant_id = ?
+    expect: []
+    reason: 'A multi-statement string passes when every statement passes.'
+
+  - id: statements-007
+    clause: [RP-13]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELEKT * FROM purchase_order
+    expect:
+      - rule: null
+        code: UNPARSEABLE
+        table: null
+        alias: null
+        message: 'QueryFence could not parse this statement, so it cannot prove it safe. Report the SQL to QueryFence, or set onUnparseable: REPORT to only report it.'
+    reason: 'SQL we cannot parse is a violation by default (fail closed).'
+
+  - id: statements-008
+    clause: [RP-13]
+    policy: default
+    dialect: postgres
+    sql: |-
+      SET search_path TO app, public
+    expect: []
+    reason: 'Session setup that the parser does not understand is still ignored, not reported.'
+
+  - id: statements-009
+    clause: [RP-13]
+    policy: default
+    dialect: ansi
+    sql: |-
+      COMMIT
+    expect: []
+    reason: 'Transaction control is ignored.'
+
+  - id: statements-010
+    clause: [RP-13]
+    policy: default
+    dialect: mysql
+    sql: |-
+      FLUSH TABLES
+    expect: []
+    reason: 'Dialect session statements the parser rejects are ignored when they cannot touch rows.'
+
+  - id: statements-011
+    clause: [RP-13]
+    policy: default
+    dialect: postgres
+    sql: |-
+      -- test setup
+      SET search_path TO app
+    expect: []
+    reason: 'Leading comments do not hide the keyword that decides whether a statement is ignored.'
+
+  - id: statements-012
+    clause: [RP-13]
+    policy: default
+    dialect: ansi
+    sql: |-
+      UPDATE purchase_order SET
+    expect:
+      - rule: null
+        code: UNPARSEABLE
+        table: null
+        alias: null
+        message: 'QueryFence could not parse this statement, so it cannot prove it safe. Report the SQL to QueryFence, or set onUnparseable: REPORT to only report it.'
+    reason: 'An unparseable statement that could write rows stays fail closed.'
+
+  - id: statements-013
+    clause: [RP-13]
+    policy: default
+    dialect: ansi
+    sql: |-
+      MERGE INTO currency c USING staging s ON (c.code = s.code)
+      WHEN MATCHED THEN UPDATE SET c.rate = s.rate
+    expect: []
+    reason: 'MERGE on an unprotected table is not reported.'
+
+  - id: statements-014
+    clause: [RP-11]
+    policy: default
+    dialect: ansi
+    sql: |-
+      UPSERT INTO purchase_order (id, tenant_id, status) VALUES (?, ?, ?)
+    expect: []
+    reason: 'UPSERT is checked like INSERT.'
+
+  - id: statements-015
+    clause: [RP-11]
+    policy: default
+    dialect: ansi
+    sql: |-
+      UPSERT INTO purchase_order (id, status) VALUES (?, ?)
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_INSERT_COLUMN
+        table: purchase_order
+        alias: null
+        message: 'INSERT into purchase_order does not set tenant_id. Add tenant_id to the column list and bind the current tenant.'
+    reason: 'UPSERT without the tenant column is a violation.'

@@ -2,6 +2,7 @@ cases:
   - id: update-delete-001
     clause: [RP-10, UW-3]
     policy: default
+    dialect: ansi
     sql: |-
       UPDATE purchase_order SET status = ? WHERE tenant_id = ? AND id = ?
     expect: []
@@ -10,6 +11,7 @@ cases:
   - id: update-delete-002
     clause: [RP-10, UW-1]
     policy: default
+    dialect: ansi
     sql: |-
       UPDATE purchase_order SET status = 'CLOSED'
     expect:
@@ -28,6 +30,7 @@ cases:
   - id: update-delete-003
     clause: [RP-10, DW-3]
     policy: default
+    dialect: ansi
     sql: |-
       DELETE FROM purchase_order WHERE id = ?
     expect:
@@ -41,6 +44,7 @@ cases:
   - id: update-delete-004
     clause: [RP-10, DW-2]
     policy: default
+    dialect: ansi
     sql: |-
       DELETE FROM order_item WHERE 1 = 1
     expect:
@@ -57,9 +61,153 @@ cases:
     reason: 'WHERE 1 = 1 is a tautology, so the DELETE is unbounded and unfenced.'
 
   - id: update-delete-005
-    clause: [RP-13]
+    clause: [RP-10, UW-2]
     policy: default
+    dialect: ansi
     sql: |-
-      TRUNCATE TABLE purchase_order
+      UPDATE purchase_order SET status = ? WHERE tenant_id = ? OR TRUE
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: null
+        message: 'purchase_order has no tenant filter. Add "purchase_order.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+      - rule: no-unbounded-update
+        code: TAUTOLOGICAL_WHERE
+        table: purchase_order
+        alias: null
+        message: 'UPDATE of purchase_order has a WHERE clause that is always true and changes every row. Replace it with a condition that selects only the intended rows.'
+    reason: 'An OR with a constant-true operand makes the WHERE a tautology and defeats the tenant filter.'
+
+  - id: update-delete-006
+    clause: [RP-10, UW-3]
+    policy: default
+    dialect: ansi
+    sql: |-
+      UPDATE purchase_order SET status = ? WHERE 1 = 1 AND tenant_id = ? AND id = ?
     expect: []
-    reason: 'TRUNCATE is DDL and ignored by every rule, because test fixtures routinely truncate tables.'
+    reason: 'A constant conjunct from a query builder is harmless when a real condition follows.'
+
+  - id: update-delete-007
+    clause: [UW-1]
+    policy: default
+    dialect: ansi
+    sql: |-
+      UPDATE currency SET rate = ?
+    expect:
+      - rule: no-unbounded-update
+        code: NO_WHERE
+        table: currency
+        alias: null
+        message: 'UPDATE of currency has no WHERE clause and changes every row. Add a WHERE clause that selects only the intended rows.'
+    reason: 'update-without-where applies to every table, protected or not.'
+
+  - id: update-delete-008
+    clause: [DW-3]
+    policy: default
+    dialect: ansi
+    sql: |-
+      DELETE FROM currency WHERE code = ?
+    expect: []
+    reason: 'An unprotected table with a real WHERE clause passes both rules.'
+
+  - id: update-delete-009
+    clause: [RP-10, DW-1]
+    policy: default
+    dialect: ansi
+    sql: |-
+      DELETE FROM invoice
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: invoice
+        alias: null
+        message: 'invoice has no tenant filter. Add "invoice.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+      - rule: no-unbounded-delete
+        code: NO_WHERE
+        table: invoice
+        alias: null
+        message: 'DELETE from invoice has no WHERE clause and removes every row. Add a WHERE clause that selects only the intended rows.'
+    reason: 'A DELETE without WHERE removes every tenant''s invoices.'
+
+  - id: update-delete-010
+    clause: [RP-10, RP-7]
+    policy: default
+    dialect: ansi
+    sql: |-
+      UPDATE purchase_order SET status = (SELECT v.status FROM invoice v WHERE v.order_id = purchase_order.id)
+      WHERE tenant_id = ?
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: invoice
+        alias: v
+        message: 'invoice (v) has no tenant filter. Add "v.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'A subquery in SET is a block of its own.'
+
+  - id: update-delete-011
+    clause: [RP-10, RP-7]
+    policy: default
+    dialect: ansi
+    sql: |-
+      UPDATE purchase_order SET status = (SELECT v.status FROM invoice v WHERE v.order_id = purchase_order.id AND v.tenant_id = ?)
+      WHERE tenant_id = ?
+    expect: []
+    reason: 'The same statement passes once the subquery filters by tenant.'
+
+  - id: update-delete-012
+    clause: [RP-10]
+    policy: default
+    dialect: ansi
+    sql: |-
+      UPDATE purchase_order SET status = ? WHERE id IN (SELECT order_id FROM order_item WHERE tenant_id = ?)
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: null
+        message: 'purchase_order has no tenant filter. Add "purchase_order.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'Fencing a subquery does not fence the UPDATE target itself.'
+
+  - id: update-delete-013
+    clause: [RP-10, UW-1]
+    policy: default
+    dialect: mysql
+    sql: |-
+      UPDATE purchase_order o SET o.status = ?
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: o
+        message: 'purchase_order (o) has no tenant filter. Add "o.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+      - rule: no-unbounded-update
+        code: NO_WHERE
+        table: purchase_order
+        alias: o
+        message: 'UPDATE of purchase_order (o) has no WHERE clause and changes every row. Add a WHERE clause that selects only the intended rows.'
+    reason: 'An aliased UPDATE target is reported with its alias.'
+
+  - id: update-delete-014
+    clause: [RP-10, DW-1]
+    policy: default
+    dialect: mysql
+    sql: |-
+      DELETE o, i FROM purchase_order o JOIN order_item i ON i.order_id = o.id
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: o
+        message: 'purchase_order (o) has no tenant filter. Add "o.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: order_item
+        alias: i
+        message: 'order_item (i) has no tenant filter. Add "i.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+      - rule: no-unbounded-delete
+        code: NO_WHERE
+        table: purchase_order
+        alias: o
+        message: 'DELETE from purchase_order (o) has no WHERE clause and removes every row. Add a WHERE clause that selects only the intended rows.'
+    reason: 'A multi-table DELETE without WHERE breaks every rule at once.'

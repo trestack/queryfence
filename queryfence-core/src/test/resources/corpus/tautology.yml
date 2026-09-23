@@ -1,0 +1,151 @@
+cases:
+  - id: tautology-001
+    clause: [UW-2]
+    policy: default
+    dialect: ansi
+    sql: |-
+      UPDATE purchase_order SET status = ? WHERE TRUE
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: null
+        message: 'purchase_order has no tenant filter. Add "purchase_order.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+      - rule: no-unbounded-update
+        code: TAUTOLOGICAL_WHERE
+        table: purchase_order
+        alias: null
+        message: 'UPDATE of purchase_order has a WHERE clause that is always true and changes every row. Replace it with a condition that selects only the intended rows.'
+    reason: 'The boolean literal TRUE is a tautology.'
+
+  - id: tautology-002
+    clause: [UW-2]
+    policy: default
+    dialect: mysql
+    sql: |-
+      UPDATE purchase_order SET status = ? WHERE 1
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: null
+        message: 'purchase_order has no tenant filter. Add "purchase_order.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+      - rule: no-unbounded-update
+        code: TAUTOLOGICAL_WHERE
+        table: purchase_order
+        alias: null
+        message: 'UPDATE of purchase_order has a WHERE clause that is always true and changes every row. Replace it with a condition that selects only the intended rows.'
+    reason: 'A non-zero numeric literal is true in MySQL and is treated as a tautology.'
+
+  - id: tautology-003
+    clause: [DW-2]
+    policy: default
+    dialect: ansi
+    sql: |-
+      DELETE FROM order_item WHERE 'a' = 'a'
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: order_item
+        alias: null
+        message: 'order_item has no tenant filter. Add "order_item.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+      - rule: no-unbounded-delete
+        code: TAUTOLOGICAL_WHERE
+        table: order_item
+        alias: null
+        message: 'DELETE from order_item has a WHERE clause that is always true and removes every row. Replace it with a condition that selects only the intended rows.'
+    reason: 'Equal string literals are always true.'
+
+  - id: tautology-004
+    clause: [DW-3]
+    policy: default
+    dialect: ansi
+    sql: |-
+      DELETE FROM order_item WHERE 1 = 2
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: order_item
+        alias: null
+        message: 'order_item has no tenant filter. Add "order_item.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'Different literals are not a tautology, so only the tenant rule fires.'
+
+  - id: tautology-005
+    clause: [UW-2]
+    policy: default
+    dialect: ansi
+    sql: |-
+      UPDATE purchase_order SET status = ? WHERE 1 = 1 AND 2 = 2
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: null
+        message: 'purchase_order has no tenant filter. Add "purchase_order.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+      - rule: no-unbounded-update
+        code: TAUTOLOGICAL_WHERE
+        table: purchase_order
+        alias: null
+        message: 'UPDATE of purchase_order has a WHERE clause that is always true and changes every row. Replace it with a condition that selects only the intended rows.'
+    reason: 'An AND of constant-true comparisons is still constant true.'
+
+  - id: tautology-006
+    clause: [DW-2]
+    policy: default
+    dialect: ansi
+    sql: |-
+      DELETE FROM order_item WHERE 2 <> 3
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: order_item
+        alias: null
+        message: 'order_item has no tenant filter. Add "order_item.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+      - rule: no-unbounded-delete
+        code: TAUTOLOGICAL_WHERE
+        table: order_item
+        alias: null
+        message: 'DELETE from order_item has a WHERE clause that is always true and removes every row. Replace it with a condition that selects only the intended rows.'
+    reason: 'An inequality between different literals is always true.'
+
+  - id: tautology-007
+    clause: [DW-3]
+    policy: default
+    dialect: ansi
+    sql: |-
+      DELETE FROM order_item WHERE 'a' <> 'a'
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: order_item
+        alias: null
+        message: 'order_item has no tenant filter. Add "order_item.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'An inequality between equal literals is never true, so it is not a tautology.'
+
+  - id: tautology-008
+    clause: [UW-2]
+    policy: default
+    dialect: ansi
+    sql: |-
+      UPDATE purchase_order SET status = ? WHERE 1.5 = 1.5
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: null
+        message: 'purchase_order has no tenant filter. Add "purchase_order.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+      - rule: no-unbounded-update
+        code: TAUTOLOGICAL_WHERE
+        table: purchase_order
+        alias: null
+        message: 'UPDATE of purchase_order has a WHERE clause that is always true and changes every row. Replace it with a condition that selects only the intended rows.'
+    reason: 'Decimal literals are compared like the other literal types.'
+
+  - id: tautology-009
+    clause: [UW-3]
+    policy: default
+    dialect: ansi
+    sql: |-
+      UPDATE purchase_order SET status = ? WHERE tenant_id = ? AND 1 = 2
+    expect: []
+    reason: 'A constant-false conjunct is not a tautology and the tenant predicate still fences the table.'

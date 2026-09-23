@@ -1,0 +1,46 @@
+cases:
+  - id: schema-001
+    clause: [RP-12]
+    policy: schema
+    dialect: ansi
+    sql: |-
+      SELECT id FROM app.purchase_order WHERE tenant_id = ?
+    expect: []
+    reason: 'A tables entry with a schema matches a reference in that schema.'
+
+  - id: schema-002
+    clause: [RP-12]
+    policy: schema
+    dialect: ansi
+    sql: |-
+      SELECT id FROM app.purchase_order WHERE status = ?
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: null
+        message: 'purchase_order has no tenant filter. Add "purchase_order.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'The occurrence in the declared schema is checked.'
+
+  - id: schema-003
+    clause: [RP-12]
+    policy: schema
+    dialect: ansi
+    sql: |-
+      SELECT id FROM other.purchase_order WHERE status = ?
+    expect: []
+    reason: 'A table of another schema is a different table and is not protected by that entry.'
+
+  - id: schema-004
+    clause: [RP-12]
+    policy: schema
+    dialect: ansi
+    sql: |-
+      SELECT id FROM purchase_order WHERE status = ?
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: null
+        message: 'purchase_order has no tenant filter. Add "purchase_order.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'An unqualified reference may be the declared table, so it is checked (fail closed).'

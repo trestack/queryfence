@@ -1,0 +1,88 @@
+cases:
+  - id: identifiers-001
+    clause: [RP-5, RP-12]
+    policy: default
+    dialect: postgres
+    sql: |-
+      SELECT po."ID" FROM app."Purchase_Order" po WHERE po."TENANT_ID" = ?
+    expect: []
+    reason: 'Quoted, mixed-case and schema-qualified identifiers still match purchase_order.tenant_id.'
+
+  - id: identifiers-002
+    clause: [RP-12]
+    policy: default
+    dialect: mysql
+    sql: |-
+      SELECT `id` FROM `purchase_order` WHERE `tenant_id` = ?
+    expect: []
+    reason: 'MySQL backticks are removed before comparing identifiers.'
+
+  - id: identifiers-003
+    clause: [RP-12]
+    policy: default
+    dialect: mysql
+    sql: |-
+      SELECT `id` FROM `Purchase_Order` WHERE `status` = ?
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: null
+        message: 'purchase_order has no tenant filter. Add "purchase_order.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'A backquoted mixed-case table is still the protected table.'
+
+  - id: identifiers-004
+    clause: [RP-12]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT id FROM app.purchase_order WHERE app.purchase_order.tenant_id = ?
+    expect: []
+    reason: 'A schema-qualified table matches a tables entry without schema, and its columns may be fully qualified.'
+
+  - id: identifiers-005
+    clause: [RP-12]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT id FROM app.purchase_order WHERE status = ?
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: null
+        message: 'purchase_order has no tenant filter. Add "purchase_order.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'A schema-qualified occurrence is checked like any other.'
+
+  - id: identifiers-006
+    clause: [RP-12]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT ID FROM PURCHASE_ORDER WHERE TENANT_ID = ?
+    expect: []
+    reason: 'Identifiers compare case-insensitively.'
+
+  - id: identifiers-007
+    clause: [RP-1, RP-12]
+    policy: default
+    dialect: postgres
+    sql: |-
+      SELECT "O".id FROM purchase_order "O" JOIN order_item "I" ON "I".order_id = "O".id
+      WHERE "O".tenant_id = ?
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: order_item
+        alias: I
+        message: 'order_item (I) has no tenant filter. Add "I.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'Quoted aliases are matched unquoted; order_item is still unfenced.'
+
+  - id: identifiers-008
+    clause: [RP-12]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT id FROM app.order_item WHERE app.order_item.tenant_id = ?
+    expect: []
+    reason: 'The same rules apply to every protected table.'

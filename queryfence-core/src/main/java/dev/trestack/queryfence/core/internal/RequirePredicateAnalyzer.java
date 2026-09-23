@@ -71,11 +71,15 @@ final class RequirePredicateAnalyzer {
     final String alias;
     final boolean fenceable;
 
-    Source(String ref, String table, String alias, boolean fenceable) {
+    /** The CTE this source refers to, or {@code null} when it is a real table. */
+    final String cteRef;
+
+    Source(String ref, String table, String alias, boolean fenceable, String cteRef) {
       this.ref = ref;
       this.table = table;
       this.alias = alias;
       this.fenceable = fenceable;
+      this.cteRef = cteRef;
     }
   }
 
@@ -113,6 +117,9 @@ final class RequirePredicateAnalyzer {
   private final RequirePredicateRule rule;
   private final String sql;
   private final List<Violation> violations = new ArrayList<>();
+
+  /** Name of the recursive CTE whose body is being analyzed, for RP-9 messages. */
+  private String recursiveCte;
 
   RequirePredicateAnalyzer(RequirePredicateRule rule, String sql) {
     this.rule = rule;
@@ -277,9 +284,15 @@ final class RequirePredicateAnalyzer {
       env.add(Names.normalize(item.getAliasName()));
     }
     for (WithItem<?> item : withItems) {
-      if (item.getSelect() != null) {
-        analyzeSelect(item.getSelect(), parent, env);
+      if (item.getSelect() == null) {
+        continue;
       }
+      String previous = recursiveCte;
+      if (item.isRecursive()) {
+        recursiveCte = Names.normalize(item.getAliasName());
+      }
+      analyzeSelect(item.getSelect(), parent, env);
+      recursiveCte = previous;
     }
     return env;
   }
@@ -336,7 +349,12 @@ final class RequirePredicateAnalyzer {
       boolean isCte = table.getSchemaName() == null && ctes.contains(name);
       boolean fenceable = !isCte && isProtected(table);
       Source source =
-          new Source(alias != null ? Names.normalize(alias) : name, name, alias, fenceable);
+          new Source(
+              alias != null ? Names.normalize(alias) : name,
+              name,
+              alias,
+              fenceable,
+              isCte ? name : null);
       scope.sources.add(source);
       return source;
     }
@@ -356,7 +374,8 @@ final class RequirePredicateAnalyzer {
       analyzeSelect(select, parent, ctes);
     }
     String alias = item.getAlias() == null ? null : Names.unquote(item.getAlias().getName());
-    Source source = new Source(alias == null ? "" : Names.normalize(alias), null, alias, false);
+    Source source =
+        new Source(alias == null ? "" : Names.normalize(alias), null, alias, false, null);
     scope.sources.add(source);
     return source;
   }
@@ -433,14 +452,28 @@ final class RequirePredicateAnalyzer {
               Messages.ambiguousColumn(first.table, first.alias, rule.column())));
       return;
     }
+    boolean recursiveBranch = recursiveCte != null && referencesCte(scope, recursiveCte);
     for (Source s : unfenced) {
       violations.add(
           violation(
               Violation.Code.MISSING_PREDICATE,
               s.table,
               s.alias,
-              Messages.missingPredicate(s.table, s.alias, rule.column())));
+              recursiveBranch
+                  ? Messages.missingPredicateInRecursiveBranch(
+                      s.table, s.alias, rule.column(), recursiveCte)
+                  : Messages.missingPredicate(s.table, s.alias, rule.column())));
     }
+  }
+
+  /** True when the block reads the given CTE, which makes it the recursive branch (RP-9). */
+  private static boolean referencesCte(Scope scope, String cte) {
+    for (Source s : scope.sources) {
+      if (cte.equals(s.cteRef)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private void analyzeSubqueries(List<Expression> holders, Scope scope, Set<String> ctes) {

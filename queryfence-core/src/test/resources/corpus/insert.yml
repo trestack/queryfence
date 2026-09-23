@@ -2,6 +2,7 @@ cases:
   - id: insert-001
     clause: [RP-11]
     policy: default
+    dialect: ansi
     sql: |-
       INSERT INTO purchase_order (id, tenant_id, status, total) VALUES (?, ?, ?, ?)
     expect: []
@@ -10,6 +11,7 @@ cases:
   - id: insert-002
     clause: [RP-11]
     policy: default
+    dialect: ansi
     sql: |-
       INSERT INTO order_item (id, order_id, sku, price) VALUES (?, ?, ?, ?)
     expect:
@@ -21,8 +23,23 @@ cases:
     reason: 'The row is inserted without a tenant_id, so no tenant can be proven to own it.'
 
   - id: insert-003
+    clause: [RP-11]
+    policy: default
+    dialect: ansi
+    sql: |-
+      INSERT INTO purchase_order VALUES (?, ?, ?)
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_INSERT_COLUMN
+        table: purchase_order
+        alias: null
+        message: 'INSERT into purchase_order does not set tenant_id. Add tenant_id to the column list and bind the current tenant.'
+    reason: 'Without a column list we cannot prove the tenant column is set.'
+
+  - id: insert-004
     clause: [RP-11, RP-1]
     policy: default
+    dialect: ansi
     sql: |-
       INSERT INTO invoice (id, tenant_id, order_id, amount)
       SELECT ?, o.tenant_id, o.id, o.total FROM purchase_order o WHERE o.status = 'SHIPPED'
@@ -33,3 +50,96 @@ cases:
         alias: o
         message: 'purchase_order (o) has no tenant filter. Add "o.tenant_id = ?" to the WHERE clause of the query block that uses it.'
     reason: 'The target column list is fine, but the SELECT source reads purchase_order across all tenants.'
+
+  - id: insert-005
+    clause: [RP-11, RP-1]
+    policy: default
+    dialect: ansi
+    sql: |-
+      INSERT INTO invoice (id, tenant_id, order_id, amount)
+      SELECT ?, o.tenant_id, o.id, o.total FROM purchase_order o WHERE o.tenant_id = ?
+    expect: []
+    reason: 'An INSERT ... SELECT passes when the source is fenced and the column list carries the tenant.'
+
+  - id: insert-006
+    clause: [RP-11, RP-1]
+    policy: default
+    dialect: ansi
+    sql: |-
+      INSERT INTO invoice (id, order_id, amount)
+      SELECT ?, o.id, o.total FROM purchase_order o
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_INSERT_COLUMN
+        table: invoice
+        alias: null
+        message: 'INSERT into invoice does not set tenant_id. Add tenant_id to the column list and bind the current tenant.'
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: o
+        message: 'purchase_order (o) has no tenant filter. Add "o.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'Target and source are checked independently, so both can fail.'
+
+  - id: insert-007
+    clause: [RP-13]
+    policy: default
+    dialect: ansi
+    sql: |-
+      INSERT INTO currency (code, rate) VALUES (?, ?)
+    expect: []
+    reason: 'Unprotected tables are not checked on INSERT.'
+
+  - id: insert-008
+    clause: [RP-11, RP-8]
+    policy: default
+    dialect: ansi
+    sql: |-
+      INSERT INTO invoice (id, tenant_id, order_id)
+      SELECT ?, tenant_id, id FROM purchase_order WHERE tenant_id = ?
+      UNION ALL
+      SELECT ?, tenant_id, order_id FROM order_item WHERE tenant_id = ?
+    expect: []
+    reason: 'Both branches of the source query are fenced.'
+
+  - id: insert-009
+    clause: [RP-11, RP-8]
+    policy: default
+    dialect: ansi
+    sql: |-
+      INSERT INTO invoice (id, tenant_id, order_id)
+      SELECT ?, tenant_id, id FROM purchase_order WHERE tenant_id = ?
+      UNION ALL
+      SELECT ?, tenant_id, order_id FROM order_item
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: order_item
+        alias: null
+        message: 'order_item has no tenant filter. Add "order_item.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'An unfenced branch of the source query is reported.'
+
+  - id: insert-010
+    clause: [RP-11, RP-7]
+    policy: default
+    dialect: ansi
+    sql: |-
+      INSERT INTO invoice (id, tenant_id, order_id)
+      VALUES (?, ?, (SELECT o.id FROM purchase_order o WHERE o.tenant_id = ? AND o.status = ?))
+    expect: []
+    reason: 'A subquery inside VALUES is a block and is fenced here.'
+
+  - id: insert-011
+    clause: [RP-11, RP-7]
+    policy: default
+    dialect: ansi
+    sql: |-
+      INSERT INTO invoice (id, tenant_id, order_id)
+      VALUES (?, ?, (SELECT o.id FROM purchase_order o WHERE o.status = ?))
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: o
+        message: 'purchase_order (o) has no tenant filter. Add "o.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'The same statement fails when the subquery is unfenced.'

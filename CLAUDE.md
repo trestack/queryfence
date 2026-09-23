@@ -99,12 +99,17 @@ parameter value checks, custom rule DSL, UI.
 
 ## Testing approach
 
-- **Golden corpus** is the heart of the project: data files of SQL + expected violations,
-  loaded by a parameterized test. Target ≥150 cases for v0.1, grouped by topic
-  (basic, alias, join, subquery, CTE, union, OR-bypass, nesting, case, quoting,
-  schema-qualified, dialects, UPDATE/DELETE, INSERT).
-- Every rule change or bug fix adds corpus cases first (test-first).
-- PIT mutation testing on the rule engine; target >85% mutation score.
+- **Golden corpus** is the heart of the project: `queryfence-core/src/test/resources/corpus`,
+  data files of SQL + expected violations (including the exact message), loaded by
+  `GoldenCorpusTest`. Each case declares its `clause` (a DESIGN.md id), `policy` and `dialect`
+  (ansi/mysql/postgres). `CorpusStructureTest` checks ids, clauses, dialects and policies.
+- Every rule change or bug fix adds corpus cases first (test-first). Prefer a violating case for
+  every structure that only has a passing one.
+- **Metamorphic test**: `MetamorphicTest` removes each tenant predicate of every passing case from
+  the parsed statement (never from the SQL text) and requires a violation. A passing case that
+  survives the removal is an engine hole.
+- PIT mutation testing on the rule engine, target >85%: `./mvnw -pl queryfence-core -Pmutation
+  verify` (CI job "Mutation testing (JDK 21)").
 - Integration tests via Testcontainers: {Hibernate, MyBatis, JdbcTemplate} × {MySQL, Postgres},
   each with one deliberately leaky query that must be caught.
 

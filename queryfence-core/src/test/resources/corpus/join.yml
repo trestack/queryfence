@@ -2,6 +2,7 @@ cases:
   - id: join-001
     clause: [RP-1, RP-5]
     policy: default
+    dialect: ansi
     sql: |-
       SELECT o.id, i.sku FROM purchase_order o JOIN order_item i ON i.order_id = o.id
       WHERE o.tenant_id = ?
@@ -16,6 +17,7 @@ cases:
   - id: join-002
     clause: [RP-1, RP-6]
     policy: default
+    dialect: ansi
     sql: |-
       SELECT o.id, i.sku FROM purchase_order o JOIN order_item i ON i.order_id = o.id
       WHERE o.tenant_id = ? AND i.tenant_id = ?
@@ -25,6 +27,7 @@ cases:
   - id: join-003
     clause: [RP-6]
     policy: default
+    dialect: ansi
     sql: |-
       SELECT o.id, c.rate FROM purchase_order o
       JOIN currency c ON c.code = o.currency_code AND o.tenant_id = ?
@@ -34,6 +37,7 @@ cases:
   - id: join-004
     clause: [RP-1]
     policy: default
+    dialect: ansi
     sql: |-
       SELECT o.id, p.id FROM purchase_order o JOIN purchase_order p ON p.parent_id = o.id
       WHERE o.tenant_id = ?
@@ -46,55 +50,115 @@ cases:
     reason: 'A self-join has two occurrences and only o is fenced.'
 
   - id: join-005
-    clause: [RP-6]
+    clause: [RP-1]
     policy: default
+    dialect: ansi
     sql: |-
-      SELECT o.id, i.sku FROM purchase_order o
-      LEFT JOIN order_item i ON i.order_id = o.id AND i.tenant_id = ? AND o.tenant_id = ?
-    expect:
-      - rule: tenant-isolation
-        code: MISSING_PREDICATE
-        table: purchase_order
-        alias: o
-        message: 'purchase_order (o) has no tenant filter. Add "o.tenant_id = ?" to the WHERE clause of the query block that uses it.'
-    reason: 'A LEFT JOIN condition does not remove rows of the preserved side: move o.tenant_id = ? from the ON clause to WHERE (i stays fenced by its ON clause).'
+      SELECT o.id, p.id FROM purchase_order o JOIN purchase_order p ON p.parent_id = o.id
+      WHERE o.tenant_id = ? AND p.tenant_id = ?
+    expect: []
+    reason: 'Both sides of a self-join can be fenced separately.'
 
   - id: join-006
-    clause: [RP-3]
+    clause: [RP-1]
     policy: default
+    dialect: ansi
     sql: |-
-      SELECT o.id, i.sku FROM purchase_order o
-      JOIN order_item i ON i.order_id = o.id AND i.tenant_id = o.tenant_id
-      WHERE o.tenant_id = ?
-    expect: []
-    reason: 'i.tenant_id = o.tenant_id fences i transitively because o is anchored by a parameter.'
-
-  - id: join-007
-    clause: [RP-3]
-    policy: default
-    sql: |-
-      SELECT o.id, i.sku FROM purchase_order o
-      JOIN order_item i ON i.order_id = o.id AND i.tenant_id = o.tenant_id
+      SELECT o.id, i.sku, v.amount FROM purchase_order o
+      JOIN order_item i ON i.order_id = o.id
+      JOIN invoice v ON v.order_id = o.id
+      WHERE o.tenant_id = ? AND i.tenant_id = ?
     expect:
       - rule: tenant-isolation
         code: MISSING_PREDICATE
-        table: purchase_order
-        alias: o
-        message: 'purchase_order (o) has no tenant filter. Add "o.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+        table: invoice
+        alias: v
+        message: 'invoice (v) has no tenant filter. Add "v.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'Adding a third table adds a third occurrence that needs its own predicate.'
+
+  - id: join-007
+    clause: [RP-1]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id, i.sku, v.amount FROM purchase_order o
+      JOIN order_item i ON i.order_id = o.id
+      JOIN invoice v ON v.order_id = o.id
+      WHERE o.tenant_id = ? AND i.tenant_id = ? AND v.tenant_id = ?
+    expect: []
+    reason: 'Three fenced occurrences pass.'
+
+  - id: join-008
+    clause: [RP-1]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id, i.sku FROM purchase_order o, order_item i WHERE o.id = i.order_id AND o.tenant_id = ?
+    expect:
       - rule: tenant-isolation
         code: MISSING_PREDICATE
         table: order_item
         alias: i
         message: 'order_item (i) has no tenant filter. Add "i.tenant_id = ?" to the WHERE clause of the query block that uses it.'
-    reason: 'A tenant-column equality with no value anchor on either side fences nothing.'
+    reason: 'A comma join is still two occurrences.'
 
-  - id: join-008
-    clause: [RP-3, RP-4]
+  - id: join-009
+    clause: [RP-1]
     policy: default
+    dialect: ansi
     sql: |-
-      SELECT o.id, i.sku, v.amount FROM purchase_order o
-      JOIN order_item i ON i.order_id = o.id AND i.tenant_id = o.tenant_id
-      JOIN invoice v ON v.order_id = o.id AND v.tenant_id = i.tenant_id
-      WHERE o.tenant_id = ?
+      SELECT o.id, i.sku FROM purchase_order o, order_item i
+      WHERE o.id = i.order_id AND o.tenant_id = ? AND i.tenant_id = ?
     expect: []
-    reason: 'Fencing propagates along the chain o -> i -> v from the single anchor on o.'
+    reason: 'A comma join passes when both occurrences are fenced.'
+
+  - id: join-010
+    clause: [RP-1]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id, i.sku FROM purchase_order o CROSS JOIN order_item i WHERE o.tenant_id = ?
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: order_item
+        alias: i
+        message: 'order_item (i) has no tenant filter. Add "i.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'A CROSS JOIN has no ON clause, so the joined table needs a WHERE predicate.'
+
+  - id: join-011
+    clause: [RP-6]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id, i.sku FROM purchase_order o JOIN order_item i ON i.order_id = o.id AND o.tenant_id = ? AND i.tenant_id = ?
+    expect: []
+    reason: 'An inner join''s ON clause may fence every table of the block.'
+
+  - id: join-012
+    clause: [RP-6]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id, i.sku FROM purchase_order o JOIN order_item i ON i.order_id = o.id AND i.tenant_id = ?
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: o
+        message: 'purchase_order (o) has no tenant filter. Add "o.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'Fencing the joined table alone leaves the driving table unfenced.'
+
+  - id: join-013
+    clause: [RP-1]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT * FROM (purchase_order o JOIN order_item i ON i.order_id = o.id) WHERE o.tenant_id = ?
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: order_item
+        alias: i
+        message: 'order_item (i) has no tenant filter. Add "i.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'A parenthesized join is flattened into the same query block.'

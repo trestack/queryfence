@@ -2,6 +2,7 @@ cases:
   - id: subquery-001
     clause: [RP-7]
     policy: default
+    dialect: ansi
     sql: |-
       SELECT o.id FROM purchase_order o WHERE o.tenant_id = ?
       AND EXISTS (SELECT 1 FROM order_item i WHERE i.order_id = o.id AND i.tenant_id = ?)
@@ -11,6 +12,22 @@ cases:
   - id: subquery-002
     clause: [RP-7]
     policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id FROM purchase_order o WHERE o.tenant_id = ?
+      AND EXISTS (SELECT 1 FROM order_item i WHERE i.order_id = o.id)
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: order_item
+        alias: i
+        message: 'order_item (i) has no tenant filter. Add "i.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'An EXISTS subquery is its own block and needs its own tenant predicate.'
+
+  - id: subquery-003
+    clause: [RP-7]
+    policy: default
+    dialect: ansi
     sql: |-
       SELECT o.id FROM purchase_order o WHERE o.tenant_id = ?
       AND o.id IN (SELECT i.order_id FROM order_item i WHERE i.sku = ?)
@@ -22,23 +39,20 @@ cases:
         message: 'order_item (i) has no tenant filter. Add "i.tenant_id = ?" to the WHERE clause of the query block that uses it.'
     reason: 'A subquery is its own block and the outer tenant predicate does not fence order_item inside it.'
 
-  - id: subquery-003
-    clause: [RP-7]
-    policy: default
-    sql: |-
-      SELECT t.id, t.total FROM (SELECT id, total, tenant_id FROM purchase_order) t
-      WHERE t.tenant_id = ?
-    expect:
-      - rule: tenant-isolation
-        code: MISSING_PREDICATE
-        table: purchase_order
-        alias: null
-        message: 'purchase_order has no tenant filter. Add "purchase_order.tenant_id = ?" to the WHERE clause of the query block that uses it.'
-    reason: 'A filter outside a derived table does not fence the table inside it (no pushdown in v0.1, known false-positive source).'
-
   - id: subquery-004
     clause: [RP-7]
     policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id FROM purchase_order o WHERE o.tenant_id = ?
+      AND o.id IN (SELECT i.order_id FROM order_item i WHERE i.tenant_id = ?)
+    expect: []
+    reason: 'The same query passes once the subquery filters by tenant.'
+
+  - id: subquery-005
+    clause: [RP-7]
+    policy: default
+    dialect: ansi
     sql: |-
       SELECT o.id, (SELECT COUNT(*) FROM invoice v WHERE v.order_id = o.id) AS invoice_count
       FROM purchase_order o WHERE o.tenant_id = ?
@@ -50,11 +64,88 @@ cases:
         message: 'invoice (v) has no tenant filter. Add "v.tenant_id = ?" to the WHERE clause of the query block that uses it.'
     reason: 'A scalar subquery in the SELECT list is its own block and its invoice occurrence is unfenced.'
 
-  - id: subquery-005
+  - id: subquery-006
+    clause: [RP-7]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id, (SELECT COUNT(*) FROM invoice v WHERE v.order_id = o.id AND v.tenant_id = ?) AS invoice_count
+      FROM purchase_order o WHERE o.tenant_id = ?
+    expect: []
+    reason: 'The scalar subquery passes once it filters by tenant.'
+
+  - id: subquery-007
     clause: [RP-3, RP-7]
     policy: default
+    dialect: ansi
     sql: |-
       SELECT o.id FROM purchase_order o WHERE o.tenant_id = ?
       AND EXISTS (SELECT 1 FROM order_item i WHERE i.order_id = o.id AND i.tenant_id = o.tenant_id)
     expect: []
     reason: 'A correlated tenant-column equality anchors i on the fenced outer occurrence o.'
+
+  - id: subquery-008
+    clause: [RP-3, RP-7]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id FROM purchase_order o WHERE o.status = ?
+      AND EXISTS (SELECT 1 FROM order_item i WHERE i.order_id = o.id AND i.tenant_id = o.tenant_id)
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: o
+        message: 'purchase_order (o) has no tenant filter. Add "o.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: order_item
+        alias: i
+        message: 'order_item (i) has no tenant filter. Add "i.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'The correlated equality fences nothing when the outer occurrence is itself unfenced.'
+
+  - id: subquery-009
+    clause: [RP-7]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id FROM purchase_order o WHERE o.tenant_id = ?
+      GROUP BY o.id HAVING COUNT(*) > (SELECT COUNT(*) FROM order_item i)
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: order_item
+        alias: i
+        message: 'order_item (i) has no tenant filter. Add "i.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'Subqueries in HAVING are checked like any other subquery.'
+
+  - id: subquery-010
+    clause: [RP-7]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id FROM purchase_order o WHERE o.tenant_id = ?
+      AND EXISTS (SELECT 1 FROM order_item i WHERE i.tenant_id = ?
+        AND EXISTS (SELECT 1 FROM invoice v WHERE v.order_id = i.order_id))
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: invoice
+        alias: v
+        message: 'invoice (v) has no tenant filter. Add "v.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'Nesting is unlimited: the innermost block is checked too.'
+
+  - id: subquery-011
+    clause: [RP-7]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id FROM purchase_order o WHERE o.tenant_id = ?
+      ORDER BY (SELECT MAX(v.amount) FROM invoice v)
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: invoice
+        alias: v
+        message: 'invoice (v) has no tenant filter. Add "v.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'Subqueries in ORDER BY are blocks too.'

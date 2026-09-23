@@ -34,3 +34,14 @@ rls:
       type: update-without-where
     - id: no-unbounded-delete
       type: delete-without-where
+
+# default, but the protected table is declared with its schema (RP-12)
+schema:
+  version: 1
+  mode: FAIL
+  onUnparseable: FAIL
+  rules:
+    - id: tenant-isolation
+      type: require-predicate
+      column: tenant_id
+      tables: [app.purchase_order]

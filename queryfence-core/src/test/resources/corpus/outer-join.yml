@@ -1,0 +1,115 @@
+cases:
+  - id: outer-join-001
+    clause: [RP-6]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id, i.sku FROM purchase_order o
+      LEFT JOIN order_item i ON i.order_id = o.id AND i.tenant_id = ?
+      WHERE o.tenant_id = ?
+    expect: []
+    reason: 'A LEFT JOIN''s ON clause fences the nullable side, and WHERE fences the preserved side.'
+
+  - id: outer-join-002
+    clause: [RP-6]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id, i.sku FROM purchase_order o
+      LEFT JOIN order_item i ON i.order_id = o.id AND i.tenant_id = ? AND o.tenant_id = ?
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: o
+        message: 'purchase_order (o) has no tenant filter. Add "o.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'A LEFT JOIN condition does not remove rows of the preserved side: move o.tenant_id = ? from the ON clause to WHERE.'
+
+  - id: outer-join-003
+    clause: [RP-6]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id, i.sku FROM purchase_order o
+      LEFT JOIN order_item i ON i.order_id = o.id
+      WHERE o.tenant_id = ?
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: order_item
+        alias: i
+        message: 'order_item (i) has no tenant filter. Add "i.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'The nullable side still needs its own tenant predicate.'
+
+  - id: outer-join-004
+    clause: [RP-6]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id, i.sku FROM purchase_order o
+      LEFT JOIN order_item i ON i.order_id = o.id
+      WHERE o.tenant_id = ? AND i.tenant_id = ?
+    expect: []
+    reason: 'A predicate on the nullable side in WHERE fences it (and turns the join into an inner join).'
+
+  - id: outer-join-005
+    clause: [RP-6]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id, i.sku FROM purchase_order o
+      RIGHT JOIN order_item i ON i.order_id = o.id AND o.tenant_id = ? AND i.tenant_id = ?
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: o
+        message: 'purchase_order (o) has no tenant filter. Add "o.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: order_item
+        alias: i
+        message: 'order_item (i) has no tenant filter. Add "i.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'A RIGHT JOIN''s ON clause does not filter the preserved right side, so neither table is fenced.'
+
+  - id: outer-join-006
+    clause: [RP-6]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id, i.sku FROM purchase_order o
+      RIGHT JOIN order_item i ON i.order_id = o.id
+      WHERE o.tenant_id = ? AND i.tenant_id = ?
+    expect: []
+    reason: 'Moving both predicates to WHERE fences both sides of a RIGHT JOIN.'
+
+  - id: outer-join-007
+    clause: [RP-6]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id, i.sku FROM purchase_order o
+      FULL JOIN order_item i ON i.order_id = o.id AND o.tenant_id = ? AND i.tenant_id = ?
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: o
+        message: 'purchase_order (o) has no tenant filter. Add "o.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: order_item
+        alias: i
+        message: 'order_item (i) has no tenant filter. Add "i.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'A FULL JOIN preserves both sides, so its ON clause fences nothing.'
+
+  - id: outer-join-008
+    clause: [RP-6]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id, c.rate FROM purchase_order o
+      LEFT JOIN currency c ON c.code = o.currency_code
+      WHERE o.tenant_id = ?
+    expect: []
+    reason: 'Outer joins with unprotected tables are unaffected.'

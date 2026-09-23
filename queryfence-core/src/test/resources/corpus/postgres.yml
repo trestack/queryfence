@@ -1,0 +1,122 @@
+cases:
+  - id: postgres-001
+    clause: [RP-10]
+    policy: default
+    dialect: postgres
+    sql: |-
+      UPDATE purchase_order o SET status = ? FROM order_item i WHERE i.order_id = o.id AND o.tenant_id = ?
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: order_item
+        alias: i
+        message: 'order_item (i) has no tenant filter. Add "i.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'The FROM table of a Postgres UPDATE is an occurrence.'
+
+  - id: postgres-002
+    clause: [RP-10]
+    policy: default
+    dialect: postgres
+    sql: |-
+      UPDATE purchase_order o SET status = ? FROM order_item i
+      WHERE i.order_id = o.id AND o.tenant_id = ? AND i.tenant_id = ?
+    expect: []
+    reason: 'Both tables of an UPDATE ... FROM are fenced here.'
+
+  - id: postgres-003
+    clause: [RP-10]
+    policy: default
+    dialect: postgres
+    sql: |-
+      DELETE FROM order_item i USING purchase_order o WHERE i.order_id = o.id AND o.tenant_id = ?
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: order_item
+        alias: i
+        message: 'order_item (i) has no tenant filter. Add "i.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'The DELETE target is unfenced even though the USING table is.'
+
+  - id: postgres-004
+    clause: [RP-10]
+    policy: default
+    dialect: postgres
+    sql: |-
+      DELETE FROM order_item i USING purchase_order o
+      WHERE i.order_id = o.id AND o.tenant_id = ? AND i.tenant_id = ?
+    expect: []
+    reason: 'Both the target and the USING table are fenced.'
+
+  - id: postgres-005
+    clause: [RP-11]
+    policy: default
+    dialect: postgres
+    sql: |-
+      INSERT INTO purchase_order (id, tenant_id, status) VALUES (?, ?, ?)
+      ON CONFLICT (id) DO UPDATE SET status = ?
+    expect: []
+    reason: 'ON CONFLICT is out of scope; the column list carries the tenant.'
+
+  - id: postgres-006
+    clause: [RP-11]
+    policy: default
+    dialect: postgres
+    sql: |-
+      INSERT INTO purchase_order (id, status) VALUES (?, ?) ON CONFLICT DO NOTHING
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_INSERT_COLUMN
+        table: purchase_order
+        alias: null
+        message: 'INSERT into purchase_order does not set tenant_id. Add tenant_id to the column list and bind the current tenant.'
+    reason: 'The column list is checked whatever the conflict action is.'
+
+  - id: postgres-007
+    clause: [RP-7]
+    policy: default
+    dialect: postgres
+    sql: |-
+      SELECT o.id, x.sku FROM purchase_order o
+      JOIN LATERAL (SELECT i.sku FROM order_item i WHERE i.order_id = o.id) x ON TRUE
+      WHERE o.tenant_id = ?
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: order_item
+        alias: i
+        message: 'order_item (i) has no tenant filter. Add "i.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'A LATERAL subquery is a block of its own and must fence its own tables.'
+
+  - id: postgres-008
+    clause: [RP-7]
+    policy: default
+    dialect: postgres
+    sql: |-
+      SELECT o.id, x.sku FROM purchase_order o
+      JOIN LATERAL (SELECT i.sku FROM order_item i WHERE i.order_id = o.id AND i.tenant_id = ?) x ON TRUE
+      WHERE o.tenant_id = ?
+    expect: []
+    reason: 'The LATERAL subquery passes once it filters by tenant.'
+
+  - id: postgres-009
+    clause: [RP-2]
+    policy: default
+    dialect: postgres
+    sql: |-
+      SELECT id FROM purchase_order WHERE tenant_id = $1 AND status = $2
+    expect: []
+    reason: 'Positional parameters are values.'
+
+  - id: postgres-010
+    clause: [RP-1]
+    policy: default
+    dialect: postgres
+    sql: |-
+      SELECT o.id FROM purchase_order o WHERE o.id = ANY(?)
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: o
+        message: 'purchase_order (o) has no tenant filter. Add "o.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'An ANY(...) predicate on another column does not fence the table.'

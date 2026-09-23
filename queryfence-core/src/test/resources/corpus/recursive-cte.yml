@@ -1,0 +1,90 @@
+cases:
+  - id: recursive-cte-001
+    clause: [RP-9]
+    policy: default
+    dialect: ansi
+    sql: |-
+      WITH RECURSIVE tree AS (
+        SELECT id, parent_id FROM purchase_order WHERE tenant_id = ?
+        UNION ALL
+        SELECT p.id, p.parent_id FROM purchase_order p JOIN tree ON p.parent_id = tree.id)
+      SELECT * FROM tree
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: p
+        message: 'purchase_order (p) has no tenant filter in the recursive branch of CTE "tree". Add "AND p.tenant_id = ?" to that branch.'
+    reason: 'The recursive branch walks rows the join alone does not restrict to one tenant, so it needs its own predicate.'
+
+  - id: recursive-cte-002
+    clause: [RP-9]
+    policy: default
+    dialect: ansi
+    sql: |-
+      WITH RECURSIVE tree AS (
+        SELECT id, parent_id FROM purchase_order WHERE tenant_id = ?
+        UNION ALL
+        SELECT p.id, p.parent_id FROM purchase_order p JOIN tree ON p.parent_id = tree.id AND p.tenant_id = ?)
+      SELECT * FROM tree
+    expect: []
+    reason: 'Both branches fence their own occurrence.'
+
+  - id: recursive-cte-003
+    clause: [RP-9]
+    policy: default
+    dialect: ansi
+    sql: |-
+      WITH RECURSIVE tree AS (
+        SELECT id, parent_id FROM purchase_order
+        UNION ALL
+        SELECT p.id, p.parent_id FROM purchase_order p JOIN tree ON p.parent_id = tree.id AND p.tenant_id = ?)
+      SELECT * FROM tree
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: null
+        message: 'purchase_order has no tenant filter. Add "purchase_order.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'The anchor branch is an ordinary block and gets the ordinary message.'
+
+  - id: recursive-cte-004
+    clause: [RP-9]
+    policy: default
+    dialect: ansi
+    sql: |-
+      WITH RECURSIVE tree AS (
+        SELECT id, parent_id FROM purchase_order
+        UNION ALL
+        SELECT p.id, p.parent_id FROM purchase_order p JOIN tree ON p.parent_id = tree.id)
+      SELECT * FROM tree
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: null
+        message: 'purchase_order has no tenant filter. Add "purchase_order.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: p
+        message: 'purchase_order (p) has no tenant filter in the recursive branch of CTE "tree". Add "AND p.tenant_id = ?" to that branch.'
+    reason: 'Both branches are reported, each with the message that fits it.'
+
+  - id: recursive-cte-005
+    clause: [RP-9]
+    policy: default
+    dialect: ansi
+    sql: |-
+      WITH RECURSIVE tree AS (
+        SELECT id, parent_id FROM purchase_order WHERE tenant_id = ?
+        UNION ALL
+        SELECT p.id, p.parent_id FROM purchase_order p JOIN tree ON p.parent_id = tree.id AND p.tenant_id = tree.tenant_id)
+      SELECT * FROM tree
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: p
+        message: 'purchase_order (p) has no tenant filter in the recursive branch of CTE "tree". Add "AND p.tenant_id = ?" to that branch.'
+    reason: 'A CTE reference cannot anchor a tenant-column equality, because the CTE is not a protected occurrence.'

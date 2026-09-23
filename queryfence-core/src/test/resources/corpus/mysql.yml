@@ -1,0 +1,128 @@
+cases:
+  - id: mysql-001
+    clause: [RP-10]
+    policy: default
+    dialect: mysql
+    sql: |-
+      UPDATE purchase_order o JOIN order_item i ON i.order_id = o.id SET i.price = ?
+      WHERE o.tenant_id = ? AND i.tenant_id = ?
+    expect: []
+    reason: 'A MySQL multi-table UPDATE passes when every occurrence is fenced.'
+
+  - id: mysql-002
+    clause: [RP-10]
+    policy: default
+    dialect: mysql
+    sql: |-
+      UPDATE purchase_order o JOIN order_item i ON i.order_id = o.id SET i.price = ?
+      WHERE o.tenant_id = ?
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: order_item
+        alias: i
+        message: 'order_item (i) has no tenant filter. Add "i.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'The joined table of a multi-table UPDATE is an occurrence too.'
+
+  - id: mysql-003
+    clause: [RP-10]
+    policy: default
+    dialect: mysql
+    sql: |-
+      DELETE o FROM purchase_order o JOIN order_item i ON i.order_id = o.id WHERE o.tenant_id = ?
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: order_item
+        alias: i
+        message: 'order_item (i) has no tenant filter. Add "i.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'A MySQL multi-table DELETE checks every table it joins, not only its targets.'
+
+  - id: mysql-004
+    clause: [RP-10]
+    policy: default
+    dialect: mysql
+    sql: |-
+      DELETE o, i FROM purchase_order o JOIN order_item i ON i.order_id = o.id
+      WHERE o.tenant_id = ? AND i.tenant_id = ?
+    expect: []
+    reason: 'Both tables of a multi-table DELETE are fenced here.'
+
+  - id: mysql-005
+    clause: [RP-11]
+    policy: default
+    dialect: mysql
+    sql: |-
+      INSERT INTO purchase_order SET id = ?, tenant_id = ?, status = ?
+    expect: []
+    reason: 'MySQL INSERT ... SET counts as a column list.'
+
+  - id: mysql-006
+    clause: [RP-11]
+    policy: default
+    dialect: mysql
+    sql: |-
+      INSERT INTO purchase_order SET id = ?, status = ?
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_INSERT_COLUMN
+        table: purchase_order
+        alias: null
+        message: 'INSERT into purchase_order does not set tenant_id. Add tenant_id to the column list and bind the current tenant.'
+    reason: 'INSERT ... SET without the tenant column is a violation.'
+
+  - id: mysql-007
+    clause: [RP-11]
+    policy: default
+    dialect: mysql
+    sql: |-
+      REPLACE INTO purchase_order (id, tenant_id, status) VALUES (?, ?, ?)
+    expect: []
+    reason: 'REPLACE INTO is treated like INSERT.'
+
+  - id: mysql-008
+    clause: [RP-11]
+    policy: default
+    dialect: mysql
+    sql: |-
+      REPLACE INTO purchase_order (id, status) VALUES (?, ?)
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_INSERT_COLUMN
+        table: purchase_order
+        alias: null
+        message: 'INSERT into purchase_order does not set tenant_id. Add tenant_id to the column list and bind the current tenant.'
+    reason: 'REPLACE INTO without the tenant column is a violation.'
+
+  - id: mysql-009
+    clause: [RP-11]
+    policy: default
+    dialect: mysql
+    sql: |-
+      INSERT INTO purchase_order (id, status) VALUES (?, ?) ON DUPLICATE KEY UPDATE status = ?
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_INSERT_COLUMN
+        table: purchase_order
+        alias: null
+        message: 'INSERT into purchase_order does not set tenant_id. Add tenant_id to the column list and bind the current tenant.'
+    reason: 'The upsert branch is not analysed, but the column list still must carry the tenant.'
+
+  - id: mysql-010
+    clause: [RP-10, UW-1]
+    policy: default
+    dialect: mysql
+    sql: |-
+      UPDATE purchase_order SET status = ? LIMIT 10
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: null
+        message: 'purchase_order has no tenant filter. Add "purchase_order.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+      - rule: no-unbounded-update
+        code: NO_WHERE
+        table: purchase_order
+        alias: null
+        message: 'UPDATE of purchase_order has no WHERE clause and changes every row. Add a WHERE clause that selects only the intended rows.'
+    reason: 'LIMIT without WHERE is still an unbounded UPDATE.'

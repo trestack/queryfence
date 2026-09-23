@@ -36,12 +36,8 @@ final class UnboundedWriteCheck {
       where = update.getWhere();
     } else if (rule.kind() == UnboundedWriteRule.Kind.DELETE
         && statement instanceof Delete delete) {
-      table =
-          delete.getTable() != null
-              ? delete.getTable()
-              : (delete.getTables() == null || delete.getTables().isEmpty()
-                  ? null
-                  : delete.getTables().get(0));
+      // Also set for the multi-table forms: DELETE o, i FROM ... reports its FROM table.
+      table = delete.getTable();
       where = delete.getWhere();
     } else {
       return List.of();

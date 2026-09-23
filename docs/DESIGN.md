@@ -250,7 +250,12 @@ SELECT id FROM purchase_order WHERE tenant_id = ? UNION SELECT id FROM invoice
 Each CTE body is a query block. A reference to a CTE name is not an occurrence, even when the CTE
 has the same name as a protected table. As with derived tables, a filter applied where the CTE is
 used does not fence the tables inside its body (same known false-positive source as RP-7).
-Recursive CTEs: each branch is checked.
+
+**Recursive CTEs:** every branch is a block of its own and must fence its own occurrences, including
+the recursive branch — the anchor branch does not fence it, because the recursion walks rows that
+the join condition alone does not restrict to one tenant. A tree walk over a protected table
+therefore needs the tenant predicate in both branches. Violations reported in a branch that reads
+the CTE itself say so and suggest adding `AND <alias>.<column> = ?` to that branch.
 
 ```sql
 -- pass
@@ -258,6 +263,20 @@ WITH mine AS (SELECT * FROM purchase_order WHERE tenant_id = ?) SELECT * FROM mi
 
 -- violation: purchase_order in the CTE body
 WITH all_orders AS (SELECT * FROM purchase_order) SELECT * FROM all_orders a WHERE a.tenant_id = ?
+
+-- violation: purchase_order (p) in the recursive branch
+WITH RECURSIVE tree AS (
+  SELECT id, parent_id FROM purchase_order WHERE tenant_id = ?
+  UNION ALL
+  SELECT p.id, p.parent_id FROM purchase_order p JOIN tree ON p.parent_id = tree.id)
+SELECT * FROM tree
+
+-- pass: both branches fence their own occurrence
+WITH RECURSIVE tree AS (
+  SELECT id, parent_id FROM purchase_order WHERE tenant_id = ?
+  UNION ALL
+  SELECT p.id, p.parent_id FROM purchase_order p JOIN tree ON p.parent_id = tree.id AND p.tenant_id = ?)
+SELECT * FROM tree
 ```
 
 ### RP-10 UPDATE and DELETE
@@ -315,6 +334,12 @@ truncate tables, and schema statements carry no tenant data. A DML statement typ
 not analyse (`MERGE` in v0.1) that references a protected table is a violation
 (`UNSUPPORTED_STATEMENT`). A string holding several statements separated by `;` is split and each
 statement is checked.
+
+Some of these statements are dialect syntax JSqlParser cannot parse (`SET search_path TO app`,
+`FLUSH TABLES`). When an unparseable statement starts with a keyword that can neither read nor
+write rows (`SET`, `SHOW`, `BEGIN`, `COMMIT`, `CREATE`, `ALTER`, `DROP`, `TRUNCATE`, `GRANT`,
+`CALL`, ...) it is ignored instead of reported, because test fixtures run such statements all the
+time. Anything else that fails to parse stays fail closed and is reported (`UNPARSEABLE`).
 
 ## Rule: `update-without-where`
 
@@ -395,8 +420,9 @@ protected tables (list views in `tables` as a workaround), the value bound to `?
 allowed function, upsert conflict branches, and SQL that no test executes.
 
 Known **false-positive** sources in v0.1, to be measured in Phase 5 (target below 5%): tenant
-filters applied outside a derived table or CTE (RP-7, RP-9), and tenant filters on the preserved
-side of an outer join placed in `ON` (RP-6, a real bug in most cases).
+filters applied outside a derived table or CTE (RP-7, RP-9), recursive CTE branches that walk a
+tree of one tenant's rows (RP-9), and tenant filters on the preserved side of an outer join placed
+in `ON` (RP-6, a real bug in most cases).
 
 ## Violation model
 
@@ -420,6 +446,7 @@ golden corpus asserts them verbatim. `{ref}` is the alias, or the table name whe
 | Code | Message template |
 |---|---|
 | `MISSING_PREDICATE` | `{table} has no tenant filter. Add "{ref}.{column} = ?" to the WHERE clause of the query block that uses it.` |
+| `MISSING_PREDICATE` in the recursive branch of a CTE | `{table} has no tenant filter in the recursive branch of CTE "{cte}". Add "AND {ref}.{column} = ?" to that branch.` |
 | `AMBIGUOUS_COLUMN` | `Column "{column}" is not qualified in a query block that uses several tables, so it protects none of them. Qualify it with the table alias, for example "{ref}.{column} = ?".` |
 | `MISSING_INSERT_COLUMN` | `INSERT into {table} does not set {column}. Add {column} to the column list and bind the current tenant.` |
 | `NO_WHERE` | `UPDATE of {table} has no WHERE clause and changes every row. Add a WHERE clause that selects only the intended rows.` (`DELETE from {table} ... removes every row.` for DELETE) |
