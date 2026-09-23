@@ -15,6 +15,8 @@
  */
 package dev.trestack.queryfence.core.internal;
 
+import java.util.List;
+
 /**
  * Violation messages. Each states the problem and the fix; the templates are specified in DESIGN.md
  * "Violation model" and asserted verbatim by the golden corpus.
@@ -44,15 +46,21 @@ final class Messages {
         + " = ?\" to that branch.";
   }
 
-  static String ambiguousColumn(String table, String alias, String column) {
+  static String ambiguousColumn(List<String> tables, String exampleRef, String column) {
     return "Column \""
         + column
-        + "\" is not qualified in a query block that uses several tables, so it protects none of"
-        + " them. Qualify it with the table alias, for example \""
-        + ref(table, alias)
+        + "\" is not qualified in a query block that reads "
+        + String.join(", ", tables)
+        + ", so it protects none of them. Qualify it with the table alias, for example \""
+        + exampleRef
         + "."
         + column
         + " = ?\".";
+  }
+
+  /** How a table is shown in messages: {@code table (alias)} when it has an alias. */
+  static String display(String table, String alias) {
+    return alias == null ? table : table + " (" + alias + ")";
   }
 
   static String missingInsertColumn(String table, String column) {
@@ -99,10 +107,6 @@ final class Messages {
 
   private static String verb(UnboundedWriteRule.Kind kind) {
     return kind == UnboundedWriteRule.Kind.UPDATE ? "changes" : "removes";
-  }
-
-  private static String display(String table, String alias) {
-    return alias == null ? table : table + " (" + alias + ")";
   }
 
   private static String ref(String table, String alias) {

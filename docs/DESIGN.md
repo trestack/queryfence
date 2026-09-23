@@ -159,7 +159,8 @@ has an alias, the table name is not a valid qualifier.
 In a query block with several row sources, an unqualified tenant column used in a predicate cannot
 be bound, because QueryFence does not know the schema. If that block has unfenced occurrences, they
 are reported as **one** `AMBIGUOUS_COLUMN` violation for the block instead of one
-`MISSING_PREDICATE` each: the fix is to qualify the column.
+`MISSING_PREDICATE` each: the fix is to qualify the column. That violation carries no `table` and no
+`alias` — it is about the block, not one table — and its message lists the candidate tables.
 
 ```sql
 -- pass: single row source, unqualified column is unambiguous
@@ -419,6 +420,30 @@ Known **unblocked** paths in v0.1 (documented limitations): views and stored pro
 protected tables (list views in `tables` as a workaround), the value bound to `?` or returned by an
 allowed function, upsert conflict branches, and SQL that no test executes.
 
+### Statements JSqlParser cannot parse
+
+QueryFence can only reason about SQL that JSqlParser 5.4 understands. Statements that can neither
+read nor write rows are ignored when they fail to parse (RP-13), but a DML statement that fails to
+parse is a violation, even if it carries a correct tenant filter. That is deliberate: a
+pattern-based ignore list would be a bypass anybody could copy into their policy. Such a statement
+is suppressed by origin, with a reason, like any other exception.
+
+We know of no valid DML statement that JSqlParser 5.4 rejects today. Dialect syntax we checked and
+that parses: `DISTINCT ON`, `ILIKE`, JSONB `->>`, `FOR UPDATE SKIP LOCKED`, `RETURNING`, Oracle
+hints, `WINDOW`, `TABLESAMPLE`, `ANY(ARRAY[...])`, `FROM ONLY`, MySQL `JSON_TABLE` in FROM and JOIN,
+`INSERT ... SET`, `REPLACE`, multi-table `UPDATE`/`DELETE`, `UPDATE ... FROM`, `DELETE ... USING`,
+`ON CONFLICT`, `ON DUPLICATE KEY UPDATE`, `LATERAL`. Statements that do not parse and are ignored by
+keyword: `SET`, `FLUSH`, `BEGIN`, `START TRANSACTION`.
+
+When we do find one, we report it upstream and record the report in `docs/upstream-issues/`.
+
+### Dialects
+
+Corpus cases declare a `dialect` (`ansi`, `mysql`, `postgres`) but v0.1 parses every statement with
+the default JSqlParser grammar, which accepts the dialect syntax we have met so far. Feeding the
+declared dialect into the parser (and into dialect-specific rules) is deferred; the field exists so
+the corpus does not have to be relabelled later.
+
 Known **false-positive** sources in v0.1, to be measured in Phase 5 (target below 5%): tenant
 filters applied outside a derived table or CTE (RP-7, RP-9), recursive CTE branches that walk a
 tree of one tenant's rows (RP-9), and tenant filters on the preserved side of an outer join placed
@@ -435,9 +460,17 @@ Each violation carries:
 | `code` | `MISSING_PREDICATE`, `AMBIGUOUS_COLUMN`, `MISSING_INSERT_COLUMN`, `NO_WHERE`, `TAUTOLOGICAL_WHERE`, `UNSUPPORTED_STATEMENT`, `UNPARSEABLE` |
 | `table`, `alias` | `order_item`, `i`; normalized table name (lower case, no quotes, no schema); `null` when not applicable |
 | `message` | what is wrong **and how to fix it** (see below) |
+| `sql` | the statement as it was checked |
 | `sql` | the statement as sent to the driver |
-| `origin` | `com.acme.order.OrderRepository#findByStatus (OrderRepository.java:42)` |
-| `test` | `com.acme.order.OrderServiceTest#listsPendingOrders` |
+The origin and the test are **not** part of a violation: `queryfence-core` does not know them.
+`queryfence-jdbc` pairs each violation with the statement that produced it, and that statement
+carries its origin:
+
+| Field of `Finding` | Example |
+|---|---|
+| `violation` | the fields above |
+| `statement.origin` | `com.acme.order.OrderRepository#findByStatus (OrderRepository.java:42)` |
+| `statement.batch` | `false`, or the batch size when it was part of one |
 
 Every message states the problem and the fix. Messages are generated from fixed templates, so the
 golden corpus asserts them verbatim. `{ref}` is the alias, or the table name when there is no alias;
@@ -447,15 +480,15 @@ golden corpus asserts them verbatim. `{ref}` is the alias, or the table name whe
 |---|---|
 | `MISSING_PREDICATE` | `{table} has no tenant filter. Add "{ref}.{column} = ?" to the WHERE clause of the query block that uses it.` |
 | `MISSING_PREDICATE` in the recursive branch of a CTE | `{table} has no tenant filter in the recursive branch of CTE "{cte}". Add "AND {ref}.{column} = ?" to that branch.` |
-| `AMBIGUOUS_COLUMN` | `Column "{column}" is not qualified in a query block that uses several tables, so it protects none of them. Qualify it with the table alias, for example "{ref}.{column} = ?".` |
+| `AMBIGUOUS_COLUMN` | `Column "{column}" is not qualified in a query block that reads {tables}, so it protects none of them. Qualify it with the table alias, for example "{ref}.{column} = ?".` |
 | `MISSING_INSERT_COLUMN` | `INSERT into {table} does not set {column}. Add {column} to the column list and bind the current tenant.` |
 | `NO_WHERE` | `UPDATE of {table} has no WHERE clause and changes every row. Add a WHERE clause that selects only the intended rows.` (`DELETE from {table} ... removes every row.` for DELETE) |
 | `TAUTOLOGICAL_WHERE` | `UPDATE of {table} has a WHERE clause that is always true and changes every row. Replace it with a condition that selects only the intended rows.` (DELETE: `removes every row`) |
 | `UNSUPPORTED_STATEMENT` | `{STATEMENT} statements on {table} are not analysed yet. Rewrite the statement as INSERT or UPDATE, or suppress its origin with a reason.` |
 | `UNPARSEABLE` | `QueryFence could not parse this statement, so it cannot prove it safe. Report the SQL to QueryFence, or set onUnparseable: REPORT to only report it.` |
 
-For `AMBIGUOUS_COLUMN`, `{ref}` is the first unfenced occurrence of the block and `table`/`alias`
-are that occurrence's.
+For `AMBIGUOUS_COLUMN`, `{tables}` lists the unfenced occurrences of the block as
+`table (alias)`, `{ref}` is the first of them, and `table`/`alias` are `null`.
 
 ## Architecture
 
@@ -471,6 +504,12 @@ are that occurrence's.
 
 `queryfence-core` never depends on JDBC, JUnit, Spring or YAML, so the engine can be reused later
 (runtime mode, text-to-SQL validation) without dragging test libraries along.
+
+The dependency rule is also a modelling rule: **core knows nothing about where a statement came
+from**. A `Violation` describes a statement, not a call site; there is no stack trace, no class
+name and no JDBC type in `queryfence-core`. `queryfence-jdbc` adds that context by pairing a
+violation with the `CapturedStatement` that produced it (`QueryRecorder.Finding`), and the report
+layers read the origin from there.
 
 ### Processing flow
 
@@ -497,10 +536,17 @@ are that occurrence's.
   `BeforeTestExecutionCallback` to `AfterTestExecutionCallback`. Fixture code in
   `@BeforeEach`/`@AfterEach`/`@BeforeAll`/`@AfterAll`, Spring context startup and schema
   migrations run outside that window and are not checked.
-- **Origin resolution.** `StackWalker` returns the first frame whose class is not in an ignored
-  package: `java.`, `javax.`, `jakarta.`, `jdk.`, `sun.`, `org.hibernate.`, `org.springframework.`,
-  `org.apache.ibatis.`, `org.mybatis.`, `org.jooq.`, `com.zaxxer.`, `net.ttddyy.`,
-  `dev.trestack.queryfence.`, plus generated proxy classes (`$$`, `$Proxy`). Users can add prefixes.
+- **Origin resolution.** `StackWalker` returns the first frame whose class is not infrastructure:
+  the JDK, the JDBC drivers, `org.hibernate.`, `org.springframework.`, `org.apache.ibatis.`,
+  `org.mybatis.`, `com.baomidou.`, `org.jooq.`, `com.zaxxer.`, `net.ttddyy.`,
+  `dev.trestack.queryfence.`, plus generated proxy classes (`$$`, `$Proxy`). Naming your own
+  packages with `CaptureSettings.ofBasePackages("com.acme")` makes the result exact: the origin is
+  then the first frame in those packages, or `Origin.unknown()` when the statement comes from
+  somewhere else entirely.
+- **What capture sees.** Every statement the driver executes, including each statement of a JDBC
+  batch (with its batch size) and statements that threw while executing. A statement the driver
+  rejects while *preparing* it never reaches the listener, so QueryFence cannot check it — that
+  test fails on its own anyway.
 - **Suppressions** match the resolved origin exactly on class name and method name (no overloads).
   A suppression without a non-blank `reason` is a configuration error at load time. Suppressions
   that matched nothing during the run are listed in the report as stale.

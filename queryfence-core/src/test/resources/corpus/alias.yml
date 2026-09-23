@@ -42,9 +42,9 @@ cases:
     expect:
       - rule: tenant-isolation
         code: AMBIGUOUS_COLUMN
-        table: purchase_order
-        alias: o
-        message: 'Column "tenant_id" is not qualified in a query block that uses several tables, so it protects none of them. Qualify it with the table alias, for example "o.tenant_id = ?".'
+        table: null
+        alias: null
+        message: 'Column "tenant_id" is not qualified in a query block that reads purchase_order (o), order_item (i), so it protects none of them. Qualify it with the table alias, for example "o.tenant_id = ?".'
     reason: 'An unqualified column in a two-table block cannot be bound to either table: qualify the column with its alias.'
 
   - id: alias-005
@@ -57,9 +57,9 @@ cases:
     expect:
       - rule: tenant-isolation
         code: AMBIGUOUS_COLUMN
-        table: purchase_order
-        alias: o
-        message: 'Column "tenant_id" is not qualified in a query block that uses several tables, so it protects none of them. Qualify it with the table alias, for example "o.tenant_id = ?".'
+        table: null
+        alias: null
+        message: 'Column "tenant_id" is not qualified in a query block that reads purchase_order (o), so it protects none of them. Qualify it with the table alias, for example "o.tenant_id = ?".'
     reason: 'The second table makes the unqualified column ambiguous even though only one table is protected.'
 
   - id: alias-006

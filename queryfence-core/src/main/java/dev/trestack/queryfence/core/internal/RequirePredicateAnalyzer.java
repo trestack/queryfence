@@ -443,13 +443,18 @@ final class RequirePredicateAnalyzer {
       return;
     }
     if (scope.ambiguousColumn) {
+      List<String> candidates = new ArrayList<>();
+      for (Source s : unfenced) {
+        candidates.add(Messages.display(s.table, s.alias));
+      }
       Source first = unfenced.get(0);
       violations.add(
           violation(
               Violation.Code.AMBIGUOUS_COLUMN,
-              first.table,
-              first.alias,
-              Messages.ambiguousColumn(first.table, first.alias, rule.column())));
+              null,
+              null,
+              Messages.ambiguousColumn(
+                  candidates, first.alias == null ? first.table : first.alias, rule.column())));
       return;
     }
     boolean recursiveBranch = recursiveCte != null && referencesCte(scope, recursiveCte);

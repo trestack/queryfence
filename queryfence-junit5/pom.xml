@@ -14,12 +14,14 @@
   <dependencies>
     <dependency>
       <groupId>io.github.trestack</groupId>
-      <artifactId>queryfence-jdbc</artifactId>
+      <artifactId>queryfence-report</artifactId>
       <version>${project.version}</version>
     </dependency>
+    <!-- provided: the user's build decides which JUnit 5 version runs the tests -->
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter-api</artifactId>
+      <scope>provided</scope>
     </dependency>
     <dependency>
       <groupId>org.yaml</groupId>
@@ -33,6 +35,21 @@
     <dependency>
       <groupId>org.assertj</groupId>
       <artifactId>assertj-core</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.h2database</groupId>
+      <artifactId>h2</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework</groupId>
+      <artifactId>spring-jdbc</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.platform</groupId>
+      <artifactId>junit-platform-testkit</artifactId>
       <scope>test</scope>
     </dependency>
   </dependencies>

@@ -33,17 +33,19 @@ Hibernate `@TenantId`/filters, MyBatis-Plus tenant interceptor). It complements 
 |---|---|---|
 | `queryfence-core` | Parser adapter, rule engine, policy model | **JSqlParser only** |
 | `queryfence-jdbc` | Capture SQL via datasource-proxy, resolve origin via `StackWalker` | core, datasource-proxy |
-| `queryfence-junit5` | JUnit 5 extension, YAML policy loading, console + JSON report | jdbc, junit-jupiter-api, snakeyaml |
-| `queryfence-spring-test` | Auto-wrap every `DataSource` bean in Spring test contexts; primary entry point for Spring Boot users | junit5, spring-test + spring-context (`provided`) |
+| `queryfence-report` | Collects findings per policy, console summary, `report.json` | jdbc |
+| `queryfence-junit5` | JUnit 5 extension, YAML policy loading | report, junit-jupiter-api (`provided`), snakeyaml |
+| `queryfence-spring-test` | Auto-wrap every `DataSource` bean in Spring test contexts; primary entry point for Spring Boot users | junit5, report, spring-test + spring-context + junit-jupiter-api (`provided`) |
 | `queryfence-bom` | Version alignment | — |
-
-`queryfence-spring-test` is part of v0.1 but not scaffolded yet.
 
 Planned later: `queryfence-integration-tests` (Testcontainers matrix), `examples/`.
 
 ## Architecture rules (do not break)
 
-1. `queryfence-core` must never depend on JDBC, JUnit, Spring or YAML libraries.
+1. `queryfence-core` must never depend on JDBC, JUnit, Spring or YAML libraries. It also must not
+   *model* them: a `Violation` says what is wrong with a statement, never where the statement came
+   from. Origins are a capture concern and live in `queryfence-jdbc` (`Origin`, `Finding`), so the
+   engine stays reusable outside tests (runtime mode, text-to-SQL validation).
 2. **Fail closed.** Anything we cannot prove safe is a violation. Unparseable SQL is a
    violation by default (`onUnparseable: FAIL`), user may downgrade.
 3. Suppressions live in the policy (YAML / builder) keyed by `Class#method` and **require a
@@ -108,7 +110,7 @@ parameter value checks, custom rule DSL, UI.
 - **Metamorphic test**: `MetamorphicTest` removes each tenant predicate of every passing case from
   the parsed statement (never from the SQL text) and requires a violation. A passing case that
   survives the removal is an engine hole.
-- PIT mutation testing on the rule engine, target >85%: `./mvnw -pl queryfence-core -Pmutation
+- PIT mutation testing on the rule engine, threshold 88%: `./mvnw -pl queryfence-core -Pmutation
   verify` (CI job "Mutation testing (JDK 21)").
 - Integration tests via Testcontainers: {Hibernate, MyBatis, JdbcTemplate} × {MySQL, Postgres},
   each with one deliberately leaky query that must be caught.
@@ -121,6 +123,11 @@ parameter value checks, custom rule DSL, UI.
 - Conventional commits: `feat:`, `fix:`, `test:`, `docs:`, `chore:`, `ci:`.
 - Update `CHANGELOG.md` under `[Unreleased]` for user-visible changes.
 - Keep versions in the parent `pom.xml` `<properties>`.
+- **Do not upgrade `junit-bom` to 6.x before the platform decision is made** (see
+  `docs/decisions/junit-platform.md`). `junit-jupiter-api` is `provided` in the published modules,
+  and CI runs them against the oldest and the newest supported JUnit. The JUnit platform QueryFence
+  builds on is part of the public contract of `queryfence-junit5`, so that decision belongs to
+  Phase 3, where the extension is designed. Close or hold Dependabot PRs that propose it.
 
 ### Workflow
 
@@ -146,8 +153,9 @@ parameter value checks, custom rule DSL, UI.
 
 ## Current status and plan
 
-Phase 0 is done (README, `docs/DESIGN.md`, first golden cases). Phase 1 (current): rule engine in
-`queryfence-core` driven by the golden corpus.
+Phase 0 to Phase 2 are done (design, 197 golden cases, rule engine, metamorphic tests, PIT, SQL
+capture with origin resolution). Phase 3 (current): `queryfence-junit5` fails tests and writes
+reports, `queryfence-spring-test` wraps the `DataSource` beans of a Spring test context.
 
 1. Phase 0 — design on paper (README, DESIGN.md, 30 cases)
 2. Phase 1 — core + golden corpus (≥150 cases) + PIT

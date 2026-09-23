@@ -33,7 +33,9 @@
     <module>queryfence-bom</module>
     <module>queryfence-core</module>
     <module>queryfence-jdbc</module>
+    <module>queryfence-report</module>
     <module>queryfence-junit5</module>
+    <module>queryfence-spring-test</module>
   </modules>
   <scm>
     <connection>scm:git:https://github.com/trestack/queryfence.git</connection>
@@ -55,7 +57,13 @@
     <jsqlparser.version>5.4</jsqlparser.version>
     <datasource-proxy.version>1.11.0</datasource-proxy.version>
     <snakeyaml.version>2.4</snakeyaml.version>
-    <junit.version>5.13.4</junit.version>
+    <h2.version>2.5.250</h2.version>
+    <spring.version>6.2.19</spring.version>
+    <spring-boot.version>3.5.9</spring-boot.version>
+    <!-- The oldest JUnit we support (Spring Boot 3.3). Building against the floor makes reaching
+         for a newer API a compile error instead of a runtime surprise for those users; CI also
+         runs the JUnit and Spring modules against the latest 5.x and 6.x. -->
+    <junit.version>5.10.5</junit.version>
     <assertj.version>3.27.4</assertj.version>
 
     <!-- Plugins -->
@@ -102,6 +110,36 @@
         <groupId>org.assertj</groupId>
         <artifactId>assertj-core</artifactId>
         <version>${assertj.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.h2database</groupId>
+        <artifactId>h2</artifactId>
+        <version>${h2.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.springframework</groupId>
+        <artifactId>spring-jdbc</artifactId>
+        <version>${spring.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.springframework</groupId>
+        <artifactId>spring-test</artifactId>
+        <version>${spring.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.springframework</groupId>
+        <artifactId>spring-context</artifactId>
+        <version>${spring.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-test</artifactId>
+        <version>${spring-boot.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-jdbc</artifactId>
+        <version>${spring-boot.version}</version>
       </dependency>
     </dependencies>
   </dependencyManagement>

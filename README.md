@@ -15,8 +15,9 @@
 </p>
 
 > [!WARNING]
-> **Work in progress.** QueryFence is in the design phase. Nothing is published to Maven Central
-> yet, and every API shown below is a design sketch that may change before 0.1.0.
+> **Work in progress.** Nothing is published to Maven Central yet and the API may still change
+> before 0.1.0. CI tests QueryFence on JUnit 5.10 to 6.1 and Spring Boot 3.3 to 4.1; it has no real
+> users on Spring Boot 4 yet, so that combination is tested but not promised.
 
 ## The problem
 
@@ -141,6 +142,19 @@ without a reason is a configuration error: QueryFence refuses to load the policy
 using it fails with a message pointing at the offending entry. Your production code never
 depends on QueryFence: there are no annotations to add to it.
 
+Another policy file for one test class:
+
+```java
+@SpringBootTest
+@QueryFencePolicy("queryfence-legacy.yml")
+class LegacyReportingTest { }
+```
+
+**Emergency exit.** `queryfence.enabled=false` (a Spring property, or `-Dqueryfence.enabled=false`
+for the JUnit extension) switches the checks off for that run. QueryFence then prints a loud
+warning on every run, because a check nobody notices is off is worse than no check. The right way
+to accept one known query is a suppression with a reason, not the switch.
+
 ### 2. Run your tests
 
 Your existing Spring tests stay exactly as they are:
@@ -230,6 +244,7 @@ static final QueryFenceExtension queryFence =
 - **Parse:** statements are parsed once and cached by SQL string.
 - **Check:** each rule walks the statement tree, including joins, subqueries, CTEs and every `UNION` branch.
 - **Fail closed:** SQL that cannot be parsed, or that cannot be proven to satisfy a rule, is a violation.
+- **Report:** the console summary and `target/queryfence/report.json` group findings per policy, each with its own mode.
 
 QueryFence never modifies or blocks the SQL. It only observes it during tests.
 

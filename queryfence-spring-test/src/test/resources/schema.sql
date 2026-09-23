@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS purchase_order (
+  id BIGINT PRIMARY KEY,
+  tenant_id BIGINT NOT NULL,
+  status VARCHAR(32) NOT NULL
+);

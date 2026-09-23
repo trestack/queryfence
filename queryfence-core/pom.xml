@@ -47,7 +47,7 @@
           <targetTests>
             <param>dev.trestack.queryfence.core.*Test</param>
           </targetTests>
-          <mutationThreshold>85</mutationThreshold>
+          <mutationThreshold>88</mutationThreshold>
           <coverageThreshold>85</coverageThreshold>
           <timestampedReports>false</timestampedReports>
           <outputFormats>
