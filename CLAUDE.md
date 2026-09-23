@@ -123,7 +123,8 @@ parameter value checks, custom rule DSL, UI.
 - Update `CHANGELOG.md` under `[Unreleased]` for user-visible changes.
 - Keep versions in the parent `pom.xml` `<properties>`.
 - **Do not upgrade `junit-bom` to 6.x before the platform decision is made** (see
-  `docs/decisions/junit-platform.md`). The JUnit platform QueryFence
+  `docs/decisions/junit-platform.md`). `junit-jupiter-api` is `provided` in the published modules,
+  and CI runs them against the oldest and the newest supported JUnit. The JUnit platform QueryFence
   builds on is part of the public contract of `queryfence-junit5`, so that decision belongs to
   Phase 3, where the extension is designed. Close or hold Dependabot PRs that propose it.
 
