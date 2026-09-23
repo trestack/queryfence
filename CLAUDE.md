@@ -108,7 +108,7 @@ parameter value checks, custom rule DSL, UI.
 - **Metamorphic test**: `MetamorphicTest` removes each tenant predicate of every passing case from
   the parsed statement (never from the SQL text) and requires a violation. A passing case that
   survives the removal is an engine hole.
-- PIT mutation testing on the rule engine, target >85%: `./mvnw -pl queryfence-core -Pmutation
+- PIT mutation testing on the rule engine, threshold 88%: `./mvnw -pl queryfence-core -Pmutation
   verify` (CI job "Mutation testing (JDK 21)").
 - Integration tests via Testcontainers: {Hibernate, MyBatis, JdbcTemplate} × {MySQL, Postgres},
   each with one deliberately leaky query that must be caught.
@@ -121,6 +121,9 @@ parameter value checks, custom rule DSL, UI.
 - Conventional commits: `feat:`, `fix:`, `test:`, `docs:`, `chore:`, `ci:`.
 - Update `CHANGELOG.md` under `[Unreleased]` for user-visible changes.
 - Keep versions in the parent `pom.xml` `<properties>`.
+- **Do not upgrade `junit-bom` to 6.x during Phase 1 and Phase 2.** The JUnit platform QueryFence
+  builds on is part of the public contract of `queryfence-junit5`, so that decision belongs to
+  Phase 3, where the extension is designed. Close or hold Dependabot PRs that propose it.
 
 ### Workflow
 

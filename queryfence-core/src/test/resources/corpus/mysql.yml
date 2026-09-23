@@ -126,3 +126,29 @@ cases:
         alias: null
         message: 'UPDATE of purchase_order has no WHERE clause and changes every row. Add a WHERE clause that selects only the intended rows.'
     reason: 'LIMIT without WHERE is still an unbounded UPDATE.'
+
+  - id: mysql-011
+    clause: [RP-1]
+    policy: default
+    dialect: mysql
+    sql: |-
+      SELECT jt.k FROM purchase_order o,
+        JSON_TABLE(o.data, '$' COLUMNS(k INT PATH '$.k')) AS jt
+      WHERE o.tenant_id = ?
+    expect: []
+    reason: 'A table function is a row source but never a protected table, so only purchase_order needs a filter.'
+
+  - id: mysql-012
+    clause: [RP-1]
+    policy: default
+    dialect: mysql
+    sql: |-
+      SELECT jt.k FROM purchase_order o,
+        JSON_TABLE(o.data, '$' COLUMNS(k INT PATH '$.k')) AS jt
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: o
+        message: 'purchase_order (o) has no tenant filter. Add "o.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'The same query without a tenant filter is a violation.'
