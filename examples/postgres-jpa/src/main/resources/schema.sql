@@ -1,0 +1,6 @@
+CREATE TABLE IF NOT EXISTS invoice (
+  id BIGINT PRIMARY KEY,
+  tenant_id BIGINT NOT NULL,
+  status VARCHAR(32) NOT NULL,
+  amount NUMERIC(10, 2) NOT NULL
+);

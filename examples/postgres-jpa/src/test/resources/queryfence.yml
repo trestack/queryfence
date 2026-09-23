@@ -1,0 +1,12 @@
+version: 1
+mode: FAIL
+onUnparseable: FAIL
+
+rules:
+  - id: tenant-isolation
+    type: require-predicate
+    column: tenant_id
+    tables: [invoice]
+
+  - id: no-unbounded-delete
+    type: delete-without-where

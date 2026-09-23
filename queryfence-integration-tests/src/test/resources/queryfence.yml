@@ -1,0 +1,17 @@
+# The integration tests only report: each test asserts what QueryFence found,
+# so a deliberate leak must not fail the test that executes it.
+version: 1
+mode: REPORT
+onUnparseable: FAIL
+
+rules:
+  - id: tenant-isolation
+    type: require-predicate
+    column: tenant_id
+    tables: [purchase_order, order_item]
+
+  - id: no-unbounded-update
+    type: update-without-where
+
+  - id: no-unbounded-delete
+    type: delete-without-where

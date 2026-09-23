@@ -444,7 +444,14 @@ the default JSqlParser grammar, which accepts the dialect syntax we have met so 
 declared dialect into the parser (and into dialect-specific rules) is deferred; the field exists so
 the corpus does not have to be relabelled later.
 
-Known **false-positive** sources in v0.1, to be measured in Phase 5 (target below 5%): tenant
+**ORM associations.** A fetch join or a lazy association loads child rows by foreign key only
+(`select ... from order_item where order_id = ?`). Those rows belong to a parent the application
+fenced, but the statement does not say so, so QueryFence reports them. Map the tenant on the
+association, protect only the aggregate root, or suppress the origin with a reason. See
+`queryfence-integration-tests/README.md` for what each framework generates.
+
+Known **false-positive** sources in v0.1, to be measured in Phase 5 (target below 5%): ORM
+associations loaded by foreign key (above), tenant
 filters applied outside a derived table or CTE (RP-7, RP-9), recursive CTE branches that walk a
 tree of one tenant's rows (RP-9), and tenant filters on the preserved side of an outer join placed
 in `ON` (RP-6, a real bug in most cases).
