@@ -34,10 +34,8 @@ Hibernate `@TenantId`/filters, MyBatis-Plus tenant interceptor). It complements 
 | `queryfence-core` | Parser adapter, rule engine, policy model | **JSqlParser only** |
 | `queryfence-jdbc` | Capture SQL via datasource-proxy, resolve origin via `StackWalker` | core, datasource-proxy |
 | `queryfence-junit5` | JUnit 5 extension, YAML policy loading, console + JSON report | jdbc, junit-jupiter-api, snakeyaml |
-| `queryfence-spring-test` | Auto-wrap every `DataSource` bean in Spring test contexts; primary entry point for Spring Boot users | junit5, spring-test + spring-context (`provided`) |
+| `queryfence-spring-test` | Auto-wrap every `DataSource` bean in Spring test contexts; primary entry point for Spring Boot users | junit5, spring-test + spring-context + junit-jupiter-api (`provided`) |
 | `queryfence-bom` | Version alignment | — |
-
-`queryfence-spring-test` is part of v0.1 but not scaffolded yet.
 
 Planned later: `queryfence-integration-tests` (Testcontainers matrix), `examples/`.
 
@@ -124,7 +122,8 @@ parameter value checks, custom rule DSL, UI.
 - Conventional commits: `feat:`, `fix:`, `test:`, `docs:`, `chore:`, `ci:`.
 - Update `CHANGELOG.md` under `[Unreleased]` for user-visible changes.
 - Keep versions in the parent `pom.xml` `<properties>`.
-- **Do not upgrade `junit-bom` to 6.x during Phase 1 and Phase 2.** The JUnit platform QueryFence
+- **Do not upgrade `junit-bom` to 6.x before the platform decision is made** (see
+  `docs/decisions/junit-platform.md`). The JUnit platform QueryFence
   builds on is part of the public contract of `queryfence-junit5`, so that decision belongs to
   Phase 3, where the extension is designed. Close or hold Dependabot PRs that propose it.
 
@@ -152,9 +151,9 @@ parameter value checks, custom rule DSL, UI.
 
 ## Current status and plan
 
-Phase 0 and Phase 1 are done (README, `docs/DESIGN.md`, 197 golden cases, rule engine, metamorphic
-tests, PIT). Phase 2 (current): `queryfence-jdbc` captures SQL through a `DataSource` proxy and
-resolves the origin with `StackWalker`.
+Phase 0 to Phase 2 are done (design, 197 golden cases, rule engine, metamorphic tests, PIT, SQL
+capture with origin resolution). Phase 3 (current): `queryfence-junit5` fails tests and writes
+reports, `queryfence-spring-test` wraps the `DataSource` beans of a Spring test context.
 
 1. Phase 0 — design on paper (README, DESIGN.md, 30 cases)
 2. Phase 1 — core + golden corpus (≥150 cases) + PIT

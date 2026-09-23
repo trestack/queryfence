@@ -1,0 +1,8 @@
+version: 1
+mode: FAIL
+
+rules:
+  - id: tenant-isolation
+    type: require-predicate
+    column: tenant_id
+    tables: [purchase_order]
