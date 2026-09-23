@@ -460,9 +460,17 @@ Each violation carries:
 | `code` | `MISSING_PREDICATE`, `AMBIGUOUS_COLUMN`, `MISSING_INSERT_COLUMN`, `NO_WHERE`, `TAUTOLOGICAL_WHERE`, `UNSUPPORTED_STATEMENT`, `UNPARSEABLE` |
 | `table`, `alias` | `order_item`, `i`; normalized table name (lower case, no quotes, no schema); `null` when not applicable |
 | `message` | what is wrong **and how to fix it** (see below) |
+| `sql` | the statement as it was checked |
 | `sql` | the statement as sent to the driver |
-| `origin` | `com.acme.order.OrderRepository#findByStatus (OrderRepository.java:42)` |
-| `test` | `com.acme.order.OrderServiceTest#listsPendingOrders` |
+The origin and the test are **not** part of a violation: `queryfence-core` does not know them.
+`queryfence-jdbc` pairs each violation with the statement that produced it, and that statement
+carries its origin:
+
+| Field of `Finding` | Example |
+|---|---|
+| `violation` | the fields above |
+| `statement.origin` | `com.acme.order.OrderRepository#findByStatus (OrderRepository.java:42)` |
+| `statement.batch` | `false`, or the batch size when it was part of one |
 
 Every message states the problem and the fix. Messages are generated from fixed templates, so the
 golden corpus asserts them verbatim. `{ref}` is the alias, or the table name when there is no alias;
@@ -496,6 +504,12 @@ For `AMBIGUOUS_COLUMN`, `{tables}` lists the unfenced occurrences of the block a
 
 `queryfence-core` never depends on JDBC, JUnit, Spring or YAML, so the engine can be reused later
 (runtime mode, text-to-SQL validation) without dragging test libraries along.
+
+The dependency rule is also a modelling rule: **core knows nothing about where a statement came
+from**. A `Violation` describes a statement, not a call site; there is no stack trace, no class
+name and no JDBC type in `queryfence-core`. `queryfence-jdbc` adds that context by pairing a
+violation with the `CapturedStatement` that produced it (`QueryRecorder.Finding`), and the report
+layers read the origin from there.
 
 ### Processing flow
 

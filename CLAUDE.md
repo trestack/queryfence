@@ -43,7 +43,10 @@ Planned later: `queryfence-integration-tests` (Testcontainers matrix), `examples
 
 ## Architecture rules (do not break)
 
-1. `queryfence-core` must never depend on JDBC, JUnit, Spring or YAML libraries.
+1. `queryfence-core` must never depend on JDBC, JUnit, Spring or YAML libraries. It also must not
+   *model* them: a `Violation` says what is wrong with a statement, never where the statement came
+   from. Origins are a capture concern and live in `queryfence-jdbc` (`Origin`, `Finding`), so the
+   engine stays reusable outside tests (runtime mode, text-to-SQL validation).
 2. **Fail closed.** Anything we cannot prove safe is a violation. Unparseable SQL is a
    violation by default (`onUnparseable: FAIL`), user may downgrade.
 3. Suppressions live in the policy (YAML / builder) keyed by `Class#method` and **require a

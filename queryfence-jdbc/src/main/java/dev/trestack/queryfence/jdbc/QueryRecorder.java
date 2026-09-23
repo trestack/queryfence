@@ -33,7 +33,6 @@ public final class QueryRecorder {
   private final Policy policy;
   private final SqlChecker checker;
   private final List<CapturedStatement> statements = new CopyOnWriteArrayList<>();
-  private volatile boolean recording = true;
 
   QueryRecorder(Policy policy) {
     this.policy = Objects.requireNonNull(policy, "policy");
@@ -50,38 +49,24 @@ public final class QueryRecorder {
     statements.clear();
   }
 
-  /** Stops recording without unwrapping the {@code DataSource}. */
-  public void pause() {
-    recording = false;
-  }
-
-  /** Resumes recording after {@link #pause()}. */
-  public void resume() {
-    recording = true;
-  }
-
-  public boolean isRecording() {
-    return recording;
-  }
-
   public Policy policy() {
     return policy;
   }
 
   /**
-   * The violations of the recorded statements, with the origin that produced each one. Suppressions
-   * of the policy are applied here, because they are keyed by origin.
+   * The violations of the recorded statements, each with the code that produced it. Suppressions of
+   * the policy are applied here, because they are keyed by origin.
    */
-  public List<FoundViolation> violations() {
-    List<FoundViolation> found = new ArrayList<>();
+  public List<Finding> findings() {
+    List<Finding> findings = new ArrayList<>();
     for (CapturedStatement statement : statements) {
       for (Violation violation : checker.check(statement.sql())) {
         if (!isSuppressed(violation, statement.origin())) {
-          found.add(new FoundViolation(violation, statement));
+          findings.add(new Finding(violation, statement));
         }
       }
     }
-    return List.copyOf(found);
+    return List.copyOf(findings);
   }
 
   private boolean isSuppressed(Violation violation, Origin origin) {
@@ -98,13 +83,11 @@ public final class QueryRecorder {
   }
 
   void record(CapturedStatement statement) {
-    if (recording) {
-      statements.add(statement);
-    }
+    statements.add(statement);
   }
 
   /** A violation together with the statement and the code that produced it. */
-  public record FoundViolation(Violation violation, CapturedStatement statement) {
+  public record Finding(Violation violation, CapturedStatement statement) {
 
     public Origin origin() {
       return statement.origin();

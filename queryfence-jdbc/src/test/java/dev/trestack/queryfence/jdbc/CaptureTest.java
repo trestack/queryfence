@@ -21,7 +21,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.acme.orders.OrderRepository;
 import dev.trestack.queryfence.core.Policy;
 import dev.trestack.queryfence.core.Violation;
-import dev.trestack.queryfence.jdbc.QueryRecorder.FoundViolation;
+import dev.trestack.queryfence.jdbc.QueryRecorder.Finding;
 import java.util.List;
 import java.util.UUID;
 import org.h2.jdbcx.JdbcDataSource;
@@ -82,7 +82,7 @@ class CaptureTest {
     repository.findByStatus(1L, "OPEN");
     int leakLine = OrderRepository.lastLine;
 
-    assertThat(fenced.recorder().violations())
+    assertThat(fenced.recorder().findings())
         .singleElement()
         .satisfies(
             found -> {
@@ -131,14 +131,14 @@ class CaptureTest {
               assertThat(statement.origin().methodName()).isEqualTo("insertAll");
               assertThat(statement.origin().lineNumber()).isEqualTo(expectedLine);
             });
-    assertThat(fenced.recorder().violations()).isEmpty();
+    assertThat(fenced.recorder().findings()).isEmpty();
   }
 
   @Test
   void reportsEveryRuleBrokenByOneStatement() {
     repository.closeAll();
 
-    assertThat(fenced.recorder().violations())
+    assertThat(fenced.recorder().findings())
         .extracting(found -> found.violation().code())
         .containsExactlyInAnyOrder(Violation.Code.MISSING_PREDICATE, Violation.Code.NO_WHERE);
   }
@@ -160,7 +160,7 @@ class CaptureTest {
     admin.findByStatus(1L, "OPEN");
 
     assertThat(suppressed.recorder().statements()).hasSize(1);
-    assertThat(suppressed.recorder().violations()).isEmpty();
+    assertThat(suppressed.recorder().findings()).isEmpty();
   }
 
   @Test
@@ -170,7 +170,7 @@ class CaptureTest {
     worker.join();
 
     assertThat(fenced.recorder().statements()).hasSize(1);
-    assertThat(fenced.recorder().violations()).hasSize(1);
+    assertThat(fenced.recorder().findings()).hasSize(1);
   }
 
   @Test
@@ -232,21 +232,18 @@ class CaptureTest {
               assertThat(statement.origin()).hasToString("unknown origin");
               assertThat(statement.origin().classAndMethod()).isEqualTo("unknown");
             });
-    assertThat(scoped.recorder().violations()).hasSize(1);
+    assertThat(scoped.recorder().findings()).hasSize(1);
   }
 
   @Test
-  void clearAndPauseControlWhatIsRecorded() {
+  void clearForgetsWhatWasRecordedSoFar() {
     repository.findByStatus(1L, "OPEN");
+    assertThat(fenced.recorder().statements()).hasSize(1);
+
     fenced.recorder().clear();
     assertThat(fenced.recorder().statements()).isEmpty();
+    assertThat(fenced.recorder().findings()).isEmpty();
 
-    fenced.recorder().pause();
-    repository.findByStatus(1L, "OPEN");
-    assertThat(fenced.recorder().isRecording()).isFalse();
-    assertThat(fenced.recorder().statements()).isEmpty();
-
-    fenced.recorder().resume();
     repository.findByStatus(1L, "OPEN");
     assertThat(fenced.recorder().statements()).hasSize(1);
   }
@@ -255,8 +252,8 @@ class CaptureTest {
   void leavesTheSqlUnchangedAndKeepsTheDataSourceUsable() {
     repository.insertAll(List.<Object[]>of(new Object[] {9L, 3L, "OPEN", 5}));
 
-    List<FoundViolation> violations = fenced.recorder().violations();
-    assertThat(violations).isEmpty();
+    List<Finding> findings = fenced.recorder().findings();
+    assertThat(findings).isEmpty();
     assertThat(
             new JdbcTemplate(fenced)
                 .queryForObject("SELECT COUNT(*) FROM purchase_order", Long.class))

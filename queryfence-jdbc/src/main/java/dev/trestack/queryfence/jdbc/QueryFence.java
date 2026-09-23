@@ -30,7 +30,7 @@ import net.ttddyy.dsproxy.support.ProxyDataSourceBuilder;
  * <pre>{@code
  * FencedDataSource fenced = QueryFence.wrap(dataSource, policy);
  * // ... run the code under test against fenced ...
- * List<FoundViolation> violations = fenced.recorder().violations();
+ * List<Finding> findings = fenced.recorder().findings();
  * }</pre>
  *
  * <p>The SQL reaches the driver unchanged; QueryFence never rewrites or blocks a statement.
