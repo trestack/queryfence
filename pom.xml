@@ -57,7 +57,7 @@
     <!-- Dependencies (Dependabot proposes version bumps automatically) -->
     <jsqlparser.version>5.4</jsqlparser.version>
     <datasource-proxy.version>1.11.0</datasource-proxy.version>
-    <snakeyaml.version>2.4</snakeyaml.version>
+    <snakeyaml.version>2.7</snakeyaml.version>
     <h2.version>2.5.250</h2.version>
     <spring.version>6.2.19</spring.version>
     <spring-boot.version>3.5.9</spring-boot.version>
