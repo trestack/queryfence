@@ -74,6 +74,11 @@ public class JpaOrderService {
     return entityManager.find(PurchaseOrder.class, id);
   }
 
+  /** The other primary-key lookup users write without thinking: repository.findById. */
+  public PurchaseOrder findById(long id) {
+    return orders.findById(id).orElse(null);
+  }
+
   /** Lazily loading the items of an order makes Hibernate select them by foreign key. */
   @Transactional(readOnly = true)
   public int countItemsOf(long tenantId, long orderId) {

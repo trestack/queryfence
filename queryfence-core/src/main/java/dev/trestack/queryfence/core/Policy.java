@@ -97,6 +97,19 @@ public final class Policy {
       return add(RequirePredicateRule.of(id, column, tables, allowedFunctions));
     }
 
+    /**
+     * Same, naming the column rows are looked up by when no tenant is involved ({@code id} by
+     * default). A query that only filters by it is reported as {@code PRIMARY_KEY_LOOKUP}.
+     */
+    public Builder requirePredicate(
+        String id,
+        String column,
+        Collection<String> tables,
+        Collection<String> allowedFunctions,
+        String primaryKey) {
+      return add(RequirePredicateRule.of(id, column, tables, allowedFunctions, primaryKey));
+    }
+
     /** Every {@code UPDATE} must have a WHERE clause that is not always true. */
     public Builder updateWithoutWhere(String id) {
       return add(new UnboundedWriteRule(id, UnboundedWriteRule.Kind.UPDATE));

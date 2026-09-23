@@ -18,6 +18,7 @@ package dev.trestack.queryfence.it.jpa;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.acme.shop.jpa.JpaOrderService;
+import dev.trestack.queryfence.core.Violation;
 import dev.trestack.queryfence.it.FencedTestBase;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -104,6 +105,16 @@ abstract class HibernateTests extends FencedTestBase {
   void catchesEntityManagerFindWhichOnlyKnowsThePrimaryKey() {
     service.loadById(1L);
 
-    assertCaught("purchase_order", "loadById");
+    assertCaught(Violation.Code.PRIMARY_KEY_LOOKUP, "purchase_order", "loadById");
+    assertThat(findings().get(0).violation().message())
+        .contains("findByIdAndTenantId")
+        .contains("@TenantId");
+  }
+
+  @Test
+  void catchesFindByIdOfTheSpringDataRepository() {
+    service.findById(2L);
+
+    assertCaught(Violation.Code.PRIMARY_KEY_LOOKUP, "purchase_order", "findById");
   }
 }

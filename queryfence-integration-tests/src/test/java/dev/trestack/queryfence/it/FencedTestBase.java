@@ -49,6 +49,19 @@ public abstract class FencedTestBase {
         .isEmpty();
   }
 
+  /** Asserts that the leak was caught with {@code code}, and says which method wrote the query. */
+  protected void assertCaught(Violation.Code code, String table, String originMethod) {
+    assertThat(findings())
+        .as("QueryFence must catch this leak")
+        .isNotEmpty()
+        .anySatisfy(
+            finding -> {
+              assertThat(finding.violation().code()).isEqualTo(code);
+              assertThat(finding.violation().table()).isEqualTo(table);
+              assertThat(finding.origin().methodName()).isEqualTo(originMethod);
+            });
+  }
+
   /** Asserts that the leak was caught on {@code table}, and says which method wrote the query. */
   protected void assertCaught(String table, String originMethod) {
     assertThat(findings())

@@ -30,9 +30,3 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   `EntityManager.find`, MyBatis dynamic SQL), each with a leak that must be caught and a correct
   query that must not be reported.
 - `examples/`: two Spring Boot projects that run with `docker compose up` and ship a failing build.
-- New violation code `PRIMARY_KEY_LOOKUP`: a statement whose only filter is the primary key
-  (`findById`, `EntityManager.find`) is reported with its own fix — filter by tenant as well, or
-  map the tenant on the entity. The column is configurable per rule with `primaryKey`.
-- Documentation site (MkDocs Material) published to `trestack.github.io/queryfence`, with
-  `llms.txt` for AI agents, plus `docs/ADOPTION.md` and `tools/queryfence-summary.py` for adopting
-  QueryFence on an existing project.

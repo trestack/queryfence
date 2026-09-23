@@ -342,6 +342,28 @@ write rows (`SET`, `SHOW`, `BEGIN`, `COMMIT`, `CREATE`, `ALTER`, `DROP`, `TRUNCA
 `CALL`, ...) it is ignored instead of reported, because test fixtures run such statements all the
 time. Anything else that fails to parse stays fail closed and is reported (`UNPARSEABLE`).
 
+### RP-14 Lookups by primary key
+
+An occurrence that is not fenced, but whose only value predicate is on the rule's `primaryKey`
+(`id` by default, configurable per rule), is reported as `PRIMARY_KEY_LOOKUP` rather than
+`MISSING_PREDICATE`. The statement is just as unsafe — ids are guessable, and `WHERE id = ?` returns
+another tenant's row as happily as its own — but the fix is a different one, so the message differs:
+filter by tenant as well, or map the tenant on the entity so every load carries it.
+
+This is the shape `EntityManager.find`, `JpaRepository.findById` and `deleteById` produce.
+
+```sql
+-- violation PRIMARY_KEY_LOOKUP
+SELECT id, total FROM purchase_order WHERE id = ?
+UPDATE purchase_order SET status = ? WHERE id = ?
+
+-- pass: the tenant filter is there too
+SELECT id, total FROM purchase_order WHERE id = ? AND tenant_id = ?
+
+-- violation MISSING_PREDICATE: under OR the id narrows nothing
+SELECT id FROM purchase_order WHERE id = ? OR status = ?
+```
+
 ## Rule: `update-without-where`
 
 ```yaml
@@ -446,9 +468,20 @@ the corpus does not have to be relabelled later.
 
 **ORM associations.** A fetch join or a lazy association loads child rows by foreign key only
 (`select ... from order_item where order_id = ?`). Those rows belong to a parent the application
-fenced, but the statement does not say so, so QueryFence reports them. Map the tenant on the
-association, protect only the aggregate root, or suppress the origin with a reason. See
-`queryfence-integration-tests/README.md` for what each framework generates.
+fenced, but the statement does not say so, so QueryFence reports them.
+
+The recommended answer is to **map the tenant on the child entity** with Hibernate `@TenantId` (or
+an equivalent filter). Hibernate then adds the tenant condition to every load of that entity,
+including lazy ones, the generated SQL carries it, and QueryFence goes quiet — which is the whole
+idea: *Hibernate enforces, QueryFence verifies*. Nothing about QueryFence changes; the SQL does.
+
+Two fallbacks, with their price:
+
+- Protect only the aggregate root in the policy. Cheap, but the child table is then never checked:
+  a query that reads `order_item` directly, without going through the root, is not reported.
+- Suppress the origin with a reason. Narrow, but it has to be revisited whenever that code changes.
+
+See `queryfence-integration-tests/README.md` for what each framework generates.
 
 Known **false-positive** sources in v0.1, to be measured in Phase 5 (target below 5%): ORM
 associations loaded by foreign key (above), tenant
@@ -464,7 +497,7 @@ Each violation carries:
 |---|---|
 | `ruleId` | `tenant-isolation` |
 | `ruleType` | `require-predicate` |
-| `code` | `MISSING_PREDICATE`, `AMBIGUOUS_COLUMN`, `MISSING_INSERT_COLUMN`, `NO_WHERE`, `TAUTOLOGICAL_WHERE`, `UNSUPPORTED_STATEMENT`, `UNPARSEABLE` |
+| `code` | `MISSING_PREDICATE`, `PRIMARY_KEY_LOOKUP`, `AMBIGUOUS_COLUMN`, `MISSING_INSERT_COLUMN`, `NO_WHERE`, `TAUTOLOGICAL_WHERE`, `UNSUPPORTED_STATEMENT`, `UNPARSEABLE` |
 | `table`, `alias` | `order_item`, `i`; normalized table name (lower case, no quotes, no schema); `null` when not applicable |
 | `message` | what is wrong **and how to fix it** (see below) |
 | `sql` | the statement as it was checked |
@@ -487,6 +520,7 @@ golden corpus asserts them verbatim. `{ref}` is the alias, or the table name whe
 |---|---|
 | `MISSING_PREDICATE` | `{table} has no tenant filter. Add "{ref}.{column} = ?" to the WHERE clause of the query block that uses it.` |
 | `MISSING_PREDICATE` in the recursive branch of a CTE | `{table} has no tenant filter in the recursive branch of CTE "{cte}". Add "AND {ref}.{column} = ?" to that branch.` |
+| `PRIMARY_KEY_LOOKUP` | `{table} is looked up by {primaryKey} only, and ids are easy to guess. Filter by tenant as well (findBy{PrimaryKey}And{Column}(...) in Spring Data), or map the tenant on the entity (Hibernate @TenantId) so every load carries it.` |
 | `AMBIGUOUS_COLUMN` | `Column "{column}" is not qualified in a query block that reads {tables}, so it protects none of them. Qualify it with the table alias, for example "{ref}.{column} = ?".` |
 | `MISSING_INSERT_COLUMN` | `INSERT into {table} does not set {column}. Add {column} to the column list and bind the current tenant.` |
 | `NO_WHERE` | `UPDATE of {table} has no WHERE clause and changes every row. Add a WHERE clause that selects only the intended rows.` (`DELETE from {table} ... removes every row.` for DELETE) |
@@ -602,6 +636,7 @@ rules:
     column: tenant_id            # require-predicate only, required
     tables: [purchase_order]     # require-predicate only, required, non-empty
     allowedFunctions: []         # require-predicate only, optional (RP-2)
+    primaryKey: id               # require-predicate only, optional, default id (RP-14)
 suppressions:
   - rule: tenant-isolation       # must name an existing rule id
     origin: com.acme.Foo#bar     # required, Class#method

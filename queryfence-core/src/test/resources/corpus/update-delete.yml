@@ -28,17 +28,17 @@ cases:
     reason: 'An UPDATE without WHERE touches every row of every tenant and breaks both rules.'
 
   - id: update-delete-003
-    clause: [RP-10, DW-3]
+    clause: [RP-10, RP-14, DW-3]
     policy: default
     dialect: ansi
     sql: |-
       DELETE FROM purchase_order WHERE id = ?
     expect:
       - rule: tenant-isolation
-        code: MISSING_PREDICATE
+        code: PRIMARY_KEY_LOOKUP
         table: purchase_order
         alias: null
-        message: 'purchase_order has no tenant filter. Add "purchase_order.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+        message: 'purchase_order is looked up by id only, and ids are easy to guess. Filter by tenant as well (findByIdAndTenantId(...) in Spring Data), or map the tenant on the entity (Hibernate @TenantId) so every load carries it.'
     reason: 'Deleting by id alone lets one tenant delete another tenant''s order by guessing its id.'
 
   - id: update-delete-004

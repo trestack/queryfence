@@ -324,7 +324,7 @@ final class RequirePredicateAnalyzer {
     }
 
     computeFenced(scope, base, leftJoinConditions);
-    reportUnfenced(scope);
+    reportUnfenced(scope, base, leftJoinConditions);
 
     List<Expression> subqueryHolders = new ArrayList<>();
     if (where != null) {
@@ -432,7 +432,8 @@ final class RequirePredicateAnalyzer {
     }
   }
 
-  private void reportUnfenced(Scope scope) {
+  private void reportUnfenced(
+      Scope scope, List<Expression> base, Map<Source, List<Expression>> leftJoinConditions) {
     List<Source> unfenced = new ArrayList<>();
     for (Source s : scope.sources) {
       if (s.fenceable && !scope.fenced.contains(s)) {
@@ -459,6 +460,15 @@ final class RequirePredicateAnalyzer {
     }
     boolean recursiveBranch = recursiveCte != null && referencesCte(scope, recursiveCte);
     for (Source s : unfenced) {
+      if (!recursiveBranch && looksUpByPrimaryKey(s, base, leftJoinConditions, scope)) {
+        violations.add(
+            violation(
+                Violation.Code.PRIMARY_KEY_LOOKUP,
+                s.table,
+                s.alias,
+                Messages.primaryKeyLookup(s.table, s.alias, rule.column(), rule.primaryKey())));
+        continue;
+      }
       violations.add(
           violation(
               Violation.Code.MISSING_PREDICATE,
@@ -469,6 +479,61 @@ final class RequirePredicateAnalyzer {
                       s.table, s.alias, rule.column(), recursiveCte)
                   : Messages.missingPredicate(s.table, s.alias, rule.column())));
     }
+  }
+
+  /**
+   * True when the only thing narrowing this occurrence is its primary key: {@code where o.id = ?}.
+   * The rows are still one tenant's rows only by luck, but the fix is a different one, so the
+   * message differs (RP-14).
+   */
+  private boolean looksUpByPrimaryKey(
+      Source source,
+      List<Expression> base,
+      Map<Source, List<Expression>> leftJoinConditions,
+      Scope scope) {
+    List<Expression> conditions = new ArrayList<>(base);
+    List<Expression> joined = leftJoinConditions.get(source);
+    if (joined != null) {
+      conditions.addAll(joined);
+    }
+    for (Expression condition : conditions) {
+      for (Expression conjunct : Expressions.conjuncts(condition)) {
+        if (isPrimaryKeyValuePredicate(conjunct, source, scope)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  private boolean isPrimaryKeyValuePredicate(Expression conjunct, Source source, Scope scope) {
+    Expression e = Expressions.unwrap(conjunct);
+    if (e instanceof EqualsTo equals) {
+      return (boundTo(equals.getLeftExpression(), source, scope)
+              && isValue(equals.getRightExpression()))
+          || (boundTo(equals.getRightExpression(), source, scope)
+              && isValue(equals.getLeftExpression()));
+    }
+    if (e instanceof InExpression in && !in.isNot()) {
+      return boundTo(in.getLeftExpression(), source, scope)
+          && in.getRightExpression() instanceof ExpressionList<?> list
+          && !list.isEmpty()
+          && allValues(list);
+    }
+    return false;
+  }
+
+  /** True when the expression is this occurrence's primary-key column. */
+  private boolean boundTo(Expression expression, Source source, Scope scope) {
+    if (!(expression instanceof Column column)
+        || !rule.primaryKey().equals(Names.normalize(column.getColumnName()))) {
+      return false;
+    }
+    Table qualifier = column.getTable();
+    if (qualifier == null || qualifier.getName() == null) {
+      return scope.sources.size() == 1 && scope.sources.get(0) == source;
+    }
+    return scope.lookup(Names.normalize(qualifier.getName())) == source;
   }
 
   /** True when the block reads the given CTE, which makes it the recursive branch (RP-9). */
