@@ -68,7 +68,7 @@
     <!-- The oldest JUnit we support (Spring Boot 3.3). Building against the floor makes reaching
          for a newer API a compile error instead of a runtime surprise for those users; CI also
          runs the JUnit and Spring modules against the latest 5.x and 6.x. -->
-    <junit.version>5.10.5</junit.version>
+    <junit.version>6.1.3</junit.version>
     <assertj.version>3.27.7</assertj.version>
 
     <!-- Plugins -->
