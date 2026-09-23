@@ -522,10 +522,17 @@ For `AMBIGUOUS_COLUMN`, `{tables}` lists the unfenced occurrences of the block a
   `BeforeTestExecutionCallback` to `AfterTestExecutionCallback`. Fixture code in
   `@BeforeEach`/`@AfterEach`/`@BeforeAll`/`@AfterAll`, Spring context startup and schema
   migrations run outside that window and are not checked.
-- **Origin resolution.** `StackWalker` returns the first frame whose class is not in an ignored
-  package: `java.`, `javax.`, `jakarta.`, `jdk.`, `sun.`, `org.hibernate.`, `org.springframework.`,
-  `org.apache.ibatis.`, `org.mybatis.`, `org.jooq.`, `com.zaxxer.`, `net.ttddyy.`,
-  `dev.trestack.queryfence.`, plus generated proxy classes (`$$`, `$Proxy`). Users can add prefixes.
+- **Origin resolution.** `StackWalker` returns the first frame whose class is not infrastructure:
+  the JDK, the JDBC drivers, `org.hibernate.`, `org.springframework.`, `org.apache.ibatis.`,
+  `org.mybatis.`, `com.baomidou.`, `org.jooq.`, `com.zaxxer.`, `net.ttddyy.`,
+  `dev.trestack.queryfence.`, plus generated proxy classes (`$$`, `$Proxy`). Naming your own
+  packages with `CaptureSettings.ofBasePackages("com.acme")` makes the result exact: the origin is
+  then the first frame in those packages, or `Origin.unknown()` when the statement comes from
+  somewhere else entirely.
+- **What capture sees.** Every statement the driver executes, including each statement of a JDBC
+  batch (with its batch size) and statements that threw while executing. A statement the driver
+  rejects while *preparing* it never reaches the listener, so QueryFence cannot check it — that
+  test fails on its own anyway.
 - **Suppressions** match the resolved origin exactly on class name and method name (no overloads).
   A suppression without a non-blank `reason` is a configuration error at load time. Suppressions
   that matched nothing during the run are listed in the report as stale.

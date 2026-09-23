@@ -149,8 +149,9 @@ parameter value checks, custom rule DSL, UI.
 
 ## Current status and plan
 
-Phase 0 is done (README, `docs/DESIGN.md`, first golden cases). Phase 1 (current): rule engine in
-`queryfence-core` driven by the golden corpus.
+Phase 0 and Phase 1 are done (README, `docs/DESIGN.md`, 197 golden cases, rule engine, metamorphic
+tests, PIT). Phase 2 (current): `queryfence-jdbc` captures SQL through a `DataSource` proxy and
+resolves the origin with `StackWalker`.
 
 1. Phase 0 — design on paper (README, DESIGN.md, 30 cases)
 2. Phase 1 — core + golden corpus (≥150 cases) + PIT

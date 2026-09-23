@@ -55,6 +55,8 @@
     <jsqlparser.version>5.4</jsqlparser.version>
     <datasource-proxy.version>1.11.0</datasource-proxy.version>
     <snakeyaml.version>2.4</snakeyaml.version>
+    <h2.version>2.5.250</h2.version>
+    <spring.version>6.2.19</spring.version>
     <junit.version>5.13.4</junit.version>
     <assertj.version>3.27.4</assertj.version>
 
@@ -102,6 +104,16 @@
         <groupId>org.assertj</groupId>
         <artifactId>assertj-core</artifactId>
         <version>${assertj.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.h2database</groupId>
+        <artifactId>h2</artifactId>
+        <version>${h2.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.springframework</groupId>
+        <artifactId>spring-jdbc</artifactId>
+        <version>${spring.version}</version>
       </dependency>
     </dependencies>
   </dependencyManagement>
