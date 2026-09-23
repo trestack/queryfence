@@ -96,7 +96,9 @@ public final class QueryFenceExtension
    */
   public DataSource wrap(DataSource dataSource) {
     if (!enabled()) {
-      Disabled.announce("the JUnit extension of " + policyName);
+      Disabled.announce(
+          "the JUnit extension of " + policyName,
+          Boolean.parseBoolean(System.getProperty(Disabled.ALLOW_IN_CI)));
       return dataSource;
     }
     FencedDataSource fenced = QueryFence.wrap(dataSource, policy, captureSettings);

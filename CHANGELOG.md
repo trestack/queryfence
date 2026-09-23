@@ -25,3 +25,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   it. The console summary and `report.json` are grouped per policy, each with its own mode.
 - `@QueryFencePolicy("other.yml")` selects another policy file for a Spring test class, and
   `queryfence.enabled=false` switches the checks off for a run, with a loud warning.
+- `queryfence-integration-tests`: Testcontainers matrix of {Hibernate, MyBatis, JdbcTemplate} ×
+  {MySQL, Postgres} on framework-generated SQL (derived queries, JPQL, pagination, fetch joins,
+  `EntityManager.find`, MyBatis dynamic SQL), each with a leak that must be caught and a correct
+  query that must not be reported.
+- `examples/`: two Spring Boot projects that run with `docker compose up` and ship a failing build.

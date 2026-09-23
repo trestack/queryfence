@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+    "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.acme.shop.mybatis.OrderMapper">
+
+  <select id="search" resultType="map">
+    SELECT id, total FROM purchase_order
+    <where>
+      <if test="tenantId != null">
+        AND tenant_id = #{tenantId}
+      </if>
+      <if test="statuses != null and statuses.size() > 0">
+        AND status IN
+        <foreach item="status" collection="statuses" open="(" separator="," close=")">
+          #{status}
+        </foreach>
+      </if>
+    </where>
+  </select>
+
+  <select id="withItems" resultType="map">
+    SELECT o.id, i.sku
+    FROM purchase_order o
+    JOIN order_item i ON i.order_id = o.id AND i.tenant_id = o.tenant_id
+    WHERE o.tenant_id = #{tenantId}
+  </select>
+
+  <select id="withItemsUnfenced" resultType="map">
+    SELECT o.id, i.sku
+    FROM purchase_order o
+    JOIN order_item i ON i.order_id = o.id
+    WHERE o.tenant_id = #{tenantId}
+  </select>
+
+  <update id="closeOrders">
+    UPDATE purchase_order SET status = 'CLOSED'
+    <where>
+      <if test="tenantId != null">
+        AND tenant_id = #{tenantId}
+      </if>
+      <if test="ids != null and ids.size() > 0">
+        AND id IN
+        <foreach item="id" collection="ids" open="(" separator="," close=")">
+          #{id}
+        </foreach>
+      </if>
+    </where>
+  </update>
+</mapper>

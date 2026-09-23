@@ -97,12 +97,19 @@ class ExtensionBehaviourTest {
   @Test
   void canBeSwitchedOffWithALoudWarning() {
     System.setProperty("queryfence.enabled", "false");
+    System.setProperty("queryfence.allowDisabledInCi", "true");
     Disabled.reset();
     try {
       run(LeakingCase.class).assertStatistics(stats -> stats.started(1).succeeded(1));
       assertThat(RunReport.instance().findings()).isEmpty();
+      assertThat(RunReport.instance().isDisabledSomewhere()).isTrue();
+      assertThat(RunReport.instance().json())
+          .contains("\"disabled\":true")
+          .contains("queryfence.enabled=false for the JUnit extension of queryfence.yml");
+      assertThat(RunReport.instance().summary()).contains("QueryFence was DISABLED");
     } finally {
       System.clearProperty("queryfence.enabled");
+      System.clearProperty("queryfence.allowDisabledInCi");
       Disabled.reset();
     }
   }

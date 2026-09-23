@@ -38,7 +38,10 @@ Hibernate `@TenantId`/filters, MyBatis-Plus tenant interceptor). It complements 
 | `queryfence-spring-test` | Auto-wrap every `DataSource` bean in Spring test contexts; primary entry point for Spring Boot users | junit5, report, spring-test + spring-context + junit-jupiter-api (`provided`) |
 | `queryfence-bom` | Version alignment | — |
 
-Planned later: `queryfence-integration-tests` (Testcontainers matrix), `examples/`.
+| `queryfence-integration-tests` | Testcontainers matrix: {Hibernate, MyBatis, JdbcTemplate} × {MySQL, Postgres}; not published | everything, test scope |
+
+`examples/` holds two standalone Spring Boot projects (MySQL + MyBatis, Postgres + JPA) that run
+with `docker compose up`; they are not part of the reactor.
 
 ## Architecture rules (do not break)
 
@@ -113,7 +116,11 @@ parameter value checks, custom rule DSL, UI.
 - PIT mutation testing on the rule engine, threshold 88%: `./mvnw -pl queryfence-core -Pmutation
   verify` (CI job "Mutation testing (JDK 21)").
 - Integration tests via Testcontainers: {Hibernate, MyBatis, JdbcTemplate} × {MySQL, Postgres},
-  each with one deliberately leaky query that must be caught.
+  each with a deliberately leaky query that must be caught **and** a correct query that must not be
+  reported. They need Docker and only run with `-Pintegration` (CI job "Integration tests"), so the
+  everyday `./mvnw verify` stays fast and Docker-free.
+- Application code in those tests lives in `com.acme.*`: QueryFence skips its own packages when it
+  resolves an origin, so fixtures in `dev.trestack.*` would resolve to the test framework instead.
 
 ## Conventions
 
