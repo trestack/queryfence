@@ -1,0 +1,55 @@
+cases:
+  - id: allowed-functions-001
+    clause: [RP-2]
+    policy: default
+    dialect: postgres
+    sql: |-
+      SELECT id FROM purchase_order WHERE tenant_id = current_setting('app.tenant_id')::bigint
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: null
+        message: 'purchase_order has no tenant filter. Add "purchase_order.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'Comparison with a function is rejected when the function is not listed in allowedFunctions.'
+
+  - id: allowed-functions-002
+    clause: [RP-2]
+    policy: rls
+    dialect: postgres
+    sql: |-
+      SELECT id FROM purchase_order WHERE tenant_id = current_setting('app.tenant_id')::bigint
+    expect: []
+    reason: 'With allowedFunctions: [current_setting] the same RLS-style comparison, including its cast, is a value predicate.'
+
+  - id: allowed-functions-003
+    clause: [RP-2]
+    policy: rls
+    dialect: postgres
+    sql: |-
+      SELECT id FROM purchase_order WHERE tenant_id = current_setting('app.tenant_id')
+    expect: []
+    reason: 'The cast is optional; the function itself is the accepted value.'
+
+  - id: allowed-functions-004
+    clause: [RP-2]
+    policy: rls
+    dialect: postgres
+    sql: |-
+      SELECT id FROM purchase_order WHERE tenant_id = tenant_of(current_user)
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: null
+        message: 'purchase_order has no tenant filter. Add "purchase_order.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'Only the listed functions are accepted, not any function.'
+
+  - id: allowed-functions-005
+    clause: [RP-2]
+    policy: rls
+    dialect: postgres
+    sql: |-
+      SELECT id FROM purchase_order WHERE tenant_id = pg_catalog.current_setting('app.tenant_id')::bigint
+    expect: []
+    reason: 'Allowed functions are matched on their unqualified name.'

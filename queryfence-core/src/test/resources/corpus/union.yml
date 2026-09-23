@@ -2,6 +2,7 @@ cases:
   - id: union-001
     clause: [RP-8]
     policy: default
+    dialect: ansi
     sql: |-
       SELECT id FROM purchase_order WHERE tenant_id = ?
       UNION ALL
@@ -12,6 +13,7 @@ cases:
   - id: union-002
     clause: [RP-8]
     policy: default
+    dialect: ansi
     sql: |-
       SELECT id FROM purchase_order WHERE tenant_id = ?
       UNION
@@ -23,3 +25,64 @@ cases:
         alias: null
         message: 'invoice has no tenant filter. Add "invoice.tenant_id = ?" to the WHERE clause of the query block that uses it.'
     reason: 'The second branch reads invoice without a tenant predicate.'
+
+  - id: union-003
+    clause: [RP-8]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT id FROM purchase_order
+      UNION
+      SELECT order_id FROM invoice WHERE tenant_id = ?
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: null
+        message: 'purchase_order has no tenant filter. Add "purchase_order.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'The first branch is checked too.'
+
+  - id: union-004
+    clause: [RP-8]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT id FROM purchase_order WHERE tenant_id = ?
+      INTERSECT
+      SELECT order_id FROM invoice WHERE tenant_id = ?
+    expect: []
+    reason: 'INTERSECT branches are blocks like UNION branches.'
+
+  - id: union-005
+    clause: [RP-8]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT id FROM purchase_order WHERE tenant_id = ?
+      EXCEPT
+      SELECT order_id FROM invoice
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: invoice
+        alias: null
+        message: 'invoice has no tenant filter. Add "invoice.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'EXCEPT branches are checked separately.'
+
+  - id: union-006
+    clause: [RP-8]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT id FROM purchase_order WHERE tenant_id = ?
+      UNION ALL
+      SELECT order_id FROM invoice
+      UNION ALL
+      SELECT order_id FROM order_item WHERE tenant_id = ?
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: invoice
+        alias: null
+        message: 'invoice has no tenant filter. Add "invoice.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'With three branches, only the unfenced one is reported.'

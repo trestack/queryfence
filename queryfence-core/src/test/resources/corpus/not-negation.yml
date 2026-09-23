@@ -1,0 +1,65 @@
+cases:
+  - id: not-negation-001
+    clause: [RP-4]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id FROM purchase_order o WHERE NOT (o.tenant_id = ?)
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: o
+        message: 'purchase_order (o) has no tenant filter. Add "o.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'A negated tenant predicate selects every other tenant.'
+
+  - id: not-negation-002
+    clause: [RP-4]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id FROM purchase_order o WHERE NOT (o.tenant_id <> ?)
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: o
+        message: 'purchase_order (o) has no tenant filter. Add "o.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'Double negation is not analysed: NOT fences nothing (fail closed).'
+
+  - id: not-negation-003
+    clause: [RP-2]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id FROM purchase_order o WHERE o.tenant_id NOT IN (?, ?)
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: o
+        message: 'purchase_order (o) has no tenant filter. Add "o.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'NOT IN is the opposite of a tenant filter.'
+
+  - id: not-negation-004
+    clause: [RP-2]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id FROM purchase_order o WHERE o.tenant_id != ?
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: o
+        message: 'purchase_order (o) has no tenant filter. Add "o.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: '!= is rejected like <>.'
+
+  - id: not-negation-005
+    clause: [RP-4]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id FROM purchase_order o WHERE NOT (o.status = 'CLOSED') AND o.tenant_id = ?
+    expect: []
+    reason: 'A NOT on another column does not affect the tenant predicate in the AND chain.'

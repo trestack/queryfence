@@ -2,6 +2,7 @@ cases:
   - id: cte-001
     clause: [RP-9]
     policy: default
+    dialect: ansi
     sql: |-
       WITH mine AS (SELECT id, status FROM purchase_order WHERE tenant_id = ?)
       SELECT m.id FROM mine m WHERE m.status = ?
@@ -11,6 +12,7 @@ cases:
   - id: cte-002
     clause: [RP-9]
     policy: default
+    dialect: ansi
     sql: |-
       WITH all_orders AS (SELECT id, tenant_id, status FROM purchase_order)
       SELECT a.id FROM all_orders a WHERE a.tenant_id = ?
@@ -21,3 +23,54 @@ cases:
         alias: null
         message: 'purchase_order has no tenant filter. Add "purchase_order.tenant_id = ?" to the WHERE clause of the query block that uses it.'
     reason: 'Filtering where the CTE is used does not fence the table inside its body (known false-positive source).'
+
+  - id: cte-003
+    clause: [RP-9]
+    policy: default
+    dialect: ansi
+    sql: |-
+      WITH purchase_order AS (SELECT ? AS id)
+      SELECT id FROM purchase_order
+    expect: []
+    reason: 'A CTE that shadows a protected table name is not an occurrence of that table.'
+
+  - id: cte-004
+    clause: [RP-9]
+    policy: default
+    dialect: ansi
+    sql: |-
+      WITH mine AS (SELECT id FROM purchase_order WHERE tenant_id = ?),
+        items AS (SELECT order_id FROM order_item)
+      SELECT m.id FROM mine m JOIN items i ON i.order_id = m.id
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: order_item
+        alias: null
+        message: 'order_item has no tenant filter. Add "order_item.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'Every CTE body is checked, not only the first.'
+
+  - id: cte-005
+    clause: [RP-9]
+    policy: default
+    dialect: ansi
+    sql: |-
+      WITH mine AS (SELECT id FROM purchase_order WHERE tenant_id = ?)
+      SELECT m.id, v.amount FROM mine m JOIN invoice v ON v.order_id = m.id WHERE v.tenant_id = ?
+    expect: []
+    reason: 'The main query may join real tables, which are fenced as usual.'
+
+  - id: cte-006
+    clause: [RP-9]
+    policy: default
+    dialect: ansi
+    sql: |-
+      WITH mine AS (SELECT id FROM purchase_order WHERE tenant_id = ?)
+      SELECT m.id, v.amount FROM mine m JOIN invoice v ON v.order_id = m.id
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: invoice
+        alias: v
+        message: 'invoice (v) has no tenant filter. Add "v.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'A fenced CTE does not fence the tables the main query joins.'

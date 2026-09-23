@@ -1,0 +1,68 @@
+cases:
+  - id: derived-table-001
+    clause: [RP-7]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT t.id, t.total FROM (SELECT id, total, tenant_id FROM purchase_order) t
+      WHERE t.tenant_id = ?
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: null
+        message: 'purchase_order has no tenant filter. Add "purchase_order.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'A filter outside a derived table does not fence the table inside it (no pushdown in v0.1, known false-positive source).'
+
+  - id: derived-table-002
+    clause: [RP-7]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT t.id, t.total FROM (SELECT id, total FROM purchase_order WHERE tenant_id = ?) t
+      WHERE t.total > ?
+    expect: []
+    reason: 'The derived table fences its own occurrence.'
+
+  - id: derived-table-003
+    clause: [RP-7, RP-8]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT id FROM purchase_order WHERE tenant_id = ?
+      UNION ALL
+      SELECT t.id FROM (SELECT id FROM invoice) t
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: invoice
+        alias: null
+        message: 'invoice has no tenant filter. Add "invoice.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'A derived table inside a UNION branch is checked like any other block.'
+
+  - id: derived-table-004
+    clause: [RP-7]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id, t.total FROM purchase_order o
+      JOIN (SELECT order_id, total FROM order_item WHERE tenant_id = ?) t ON t.order_id = o.id
+      WHERE o.tenant_id = ?
+    expect: []
+    reason: 'Both the outer table and the table inside the derived table are fenced.'
+
+  - id: derived-table-005
+    clause: [RP-7]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id, t.total FROM purchase_order o
+      JOIN (SELECT order_id, total FROM order_item) t ON t.order_id = o.id
+      WHERE o.tenant_id = ? AND t.tenant_id = ?
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: order_item
+        alias: null
+        message: 'order_item has no tenant filter. Add "order_item.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'Filtering the derived table from outside leaves order_item unfenced inside it.'

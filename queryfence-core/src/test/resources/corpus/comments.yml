@@ -1,0 +1,51 @@
+cases:
+  - id: comments-001
+    clause: [RP-1]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id FROM purchase_order o WHERE o.status = ? -- AND o.tenant_id = ?
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: o
+        message: 'purchase_order (o) has no tenant filter. Add "o.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'A tenant filter inside a line comment never reaches the database.'
+
+  - id: comments-002
+    clause: [RP-1]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id FROM purchase_order o WHERE /* o.tenant_id = ? AND */ o.status = ?
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: o
+        message: 'purchase_order (o) has no tenant filter. Add "o.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'A tenant filter inside a block comment never reaches the database.'
+
+  - id: comments-003
+    clause: [RP-2]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id FROM purchase_order o /* pick one tenant */ WHERE o.tenant_id = ?
+    expect: []
+    reason: 'Comments elsewhere do not affect the check.'
+
+  - id: comments-004
+    clause: [RP-1]
+    policy: default
+    dialect: ansi
+    sql: |-
+      /* OrderRepository.findByStatus */ SELECT o.id FROM purchase_order o WHERE o.status = ?
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: o
+        message: 'purchase_order (o) has no tenant filter. Add "o.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'A leading comment, as ORMs emit, does not change the verdict.'

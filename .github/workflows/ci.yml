@@ -29,3 +29,23 @@ jobs:
           cache: maven
       - name: Build and test
         run: ./mvnw -B -ntp verify
+
+  mutation:
+    name: Mutation testing (JDK 21)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+      - name: PIT mutation coverage of the rule engine
+        run: ./mvnw -B -ntp -pl queryfence-core -Pmutation verify
+      - name: Upload PIT report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pit-report
+          path: queryfence-core/target/pit-reports
+          if-no-files-found: ignore

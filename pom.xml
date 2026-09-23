@@ -70,6 +70,8 @@
     <google-java-format.version>1.36.1</google-java-format.version>
     <jacoco-plugin.version>0.8.15</jacoco-plugin.version>
     <enforcer-plugin.version>3.6.1</enforcer-plugin.version>
+    <pitest-plugin.version>1.30.0</pitest-plugin.version>
+    <pitest-junit5-plugin.version>1.2.3</pitest-junit5-plugin.version>
   </properties>
 
   <dependencyManagement>

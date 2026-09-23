@@ -32,6 +32,18 @@ final class Messages {
         + " = ?\" to the WHERE clause of the query block that uses it.";
   }
 
+  static String missingPredicateInRecursiveBranch(
+      String table, String alias, String column, String cte) {
+    return display(table, alias)
+        + " has no tenant filter in the recursive branch of CTE \""
+        + cte
+        + "\". Add \"AND "
+        + ref(table, alias)
+        + "."
+        + column
+        + " = ?\" to that branch.";
+  }
+
   static String ambiguousColumn(String table, String alias, String column) {
     return "Column \""
         + column

@@ -2,6 +2,7 @@ cases:
   - id: or-bypass-001
     clause: [RP-4]
     policy: default
+    dialect: ansi
     sql: |-
       SELECT o.id FROM purchase_order o WHERE o.tenant_id = ? OR 1 = 1
     expect:
@@ -15,6 +16,7 @@ cases:
   - id: or-bypass-002
     clause: [RP-4]
     policy: default
+    dialect: ansi
     sql: |-
       SELECT o.id FROM purchase_order o WHERE o.tenant_id = ? OR o.tenant_id = ?
     expect: []
@@ -23,6 +25,7 @@ cases:
   - id: or-bypass-003
     clause: [RP-4]
     policy: default
+    dialect: ansi
     sql: |-
       SELECT o.id FROM purchase_order o WHERE o.tenant_id = ? AND (o.status = ? OR o.status = ?)
     expect: []
@@ -31,6 +34,7 @@ cases:
   - id: or-bypass-004
     clause: [RP-4]
     policy: default
+    dialect: ansi
     sql: |-
       SELECT o.id FROM purchase_order o
       WHERE (o.tenant_id = ? AND o.status = 'A') OR (o.tenant_id = ? AND o.status = 'B') OR o.status = 'C'
@@ -45,8 +49,48 @@ cases:
   - id: or-bypass-005
     clause: [RP-4]
     policy: default
+    dialect: ansi
     sql: |-
       SELECT o.id FROM purchase_order o
       WHERE (o.tenant_id = ? AND (o.status = 'A' OR o.status = 'B')) OR (o.tenant_id IN (?, ?) AND o.total > 0)
     expect: []
     reason: 'Applied recursively, both top-level branches fence o through an AND conjunct.'
+
+  - id: or-bypass-006
+    clause: [RP-4]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id, i.sku FROM purchase_order o JOIN order_item i ON i.order_id = o.id
+      WHERE (o.tenant_id = ? AND i.tenant_id = ?) OR o.tenant_id = ?
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: order_item
+        alias: i
+        message: 'order_item (i) has no tenant filter. Add "i.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'The OR fences only what every branch fences: o is fenced, order_item is not.'
+
+  - id: or-bypass-007
+    clause: [RP-4]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id, i.sku FROM purchase_order o JOIN order_item i ON i.order_id = o.id
+      WHERE (o.tenant_id = ? AND i.tenant_id = ?) OR (o.tenant_id = ? AND i.tenant_id = ?)
+    expect: []
+    reason: 'Both branches fence both tables, so the whole OR does.'
+
+  - id: or-bypass-008
+    clause: [RP-4]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id FROM purchase_order o WHERE o.tenant_id = ? OR o.tenant_id IS NULL
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: o
+        message: 'purchase_order (o) has no tenant filter. Add "o.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'IS NULL is not a value predicate, so that branch fences nothing.'

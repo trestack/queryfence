@@ -57,6 +57,13 @@ final class ParseCache {
     return parsed;
   }
 
+  /** Entries currently cached; for tests. */
+  int size() {
+    synchronized (cache) {
+      return cache.size();
+    }
+  }
+
   private static Parsed parse(String sql) {
     try {
       return new Parsed(List.copyOf(CCJSqlParserUtil.parseStatements(sql)));

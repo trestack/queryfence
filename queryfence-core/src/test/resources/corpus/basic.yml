@@ -2,6 +2,7 @@ cases:
   - id: basic-001
     clause: [RP-2, RP-5]
     policy: default
+    dialect: ansi
     sql: |-
       SELECT id, status FROM purchase_order WHERE tenant_id = ?
     expect: []
@@ -10,6 +11,7 @@ cases:
   - id: basic-002
     clause: [RP-1]
     policy: default
+    dialect: ansi
     sql: |-
       SELECT o.id, o.total FROM purchase_order o WHERE o.status = ?
     expect:
@@ -21,8 +23,32 @@ cases:
     reason: 'Filtering by status alone returns every tenant''s orders (the README example).'
 
   - id: basic-003
+    clause: [RP-1]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT id FROM purchase_order
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: null
+        message: 'purchase_order has no tenant filter. Add "purchase_order.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'A query with no WHERE clause reads every tenant''s rows.'
+
+  - id: basic-004
+    clause: [RP-13]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT code, rate FROM currency WHERE code = ?
+    expect: []
+    reason: 'currency is not a protected table, so require-predicate does not apply.'
+
+  - id: basic-005
     clause: [RP-2]
     policy: default
+    dialect: ansi
     sql: |-
       SELECT id FROM invoice WHERE tenant_id <> ? AND status = 'PAID'
     expect:
@@ -33,23 +59,34 @@ cases:
         message: 'invoice has no tenant filter. Add "invoice.tenant_id = ?" to the WHERE clause of the query block that uses it.'
     reason: 'An inequality selects every other tenant and is not a value predicate.'
 
-  - id: basic-004
+  - id: basic-006
     clause: [RP-2]
     policy: default
+    dialect: ansi
     sql: |-
-      SELECT id FROM purchase_order WHERE tenant_id = current_setting('app.tenant_id')::bigint
+      SELECT id FROM purchase_order WHERE tenant_id = 42
+    expect: []
+    reason: 'A numeric literal is a value, even though its value is not checked in v0.1.'
+
+  - id: basic-007
+    clause: [RP-2]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT id FROM purchase_order WHERE tenant_id > ?
     expect:
       - rule: tenant-isolation
         code: MISSING_PREDICATE
         table: purchase_order
         alias: null
         message: 'purchase_order has no tenant filter. Add "purchase_order.tenant_id = ?" to the WHERE clause of the query block that uses it.'
-    reason: 'Comparison with a function is rejected when the function is not listed in allowedFunctions.'
+    reason: 'A range comparison is not a value predicate.'
 
-  - id: basic-005
+  - id: basic-008
     clause: [RP-2]
-    policy: rls
+    policy: default
+    dialect: ansi
     sql: |-
-      SELECT id FROM purchase_order WHERE tenant_id = current_setting('app.tenant_id')::bigint
+      SELECT id FROM purchase_order WHERE 42 = tenant_id
     expect: []
-    reason: 'With allowedFunctions: [current_setting] the same RLS-style comparison, including its cast, is a value predicate.'
+    reason: 'A value predicate may be written with the value on the left.'

@@ -1,0 +1,141 @@
+cases:
+  - id: transitive-001
+    clause: [RP-3]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id, i.sku FROM purchase_order o
+      JOIN order_item i ON i.order_id = o.id AND i.tenant_id = o.tenant_id
+      WHERE o.tenant_id = ?
+    expect: []
+    reason: 'i.tenant_id = o.tenant_id fences i transitively because o is anchored by a parameter.'
+
+  - id: transitive-002
+    clause: [RP-3]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id, i.sku FROM purchase_order o
+      JOIN order_item i ON i.order_id = o.id AND i.tenant_id = o.tenant_id
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: o
+        message: 'purchase_order (o) has no tenant filter. Add "o.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: order_item
+        alias: i
+        message: 'order_item (i) has no tenant filter. Add "i.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'A tenant-column equality with no value anchor on either side fences nothing.'
+
+  - id: transitive-003
+    clause: [RP-3, RP-4]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id, i.sku, v.amount FROM purchase_order o
+      JOIN order_item i ON i.order_id = o.id AND i.tenant_id = o.tenant_id
+      JOIN invoice v ON v.order_id = o.id AND v.tenant_id = i.tenant_id
+      WHERE o.tenant_id = ?
+    expect: []
+    reason: 'Fencing propagates along the chain o -> i -> v from the single anchor on o.'
+
+  - id: transitive-004
+    clause: [RP-3]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id, v.amount FROM purchase_order o
+      JOIN invoice v ON v.order_id = o.id AND v.tenant_id = o.id
+      WHERE o.tenant_id = ?
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: invoice
+        alias: v
+        message: 'invoice (v) has no tenant filter. Add "v.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'Only an equality between the rule''s column on both sides propagates fencing.'
+
+  - id: transitive-005
+    clause: [RP-3]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id, i.sku FROM purchase_order o
+      JOIN order_item i ON i.order_id = o.id
+      WHERE o.tenant_id = ? AND i.tenant_id = o.tenant_id
+    expect: []
+    reason: 'The tenant-column equality may sit in WHERE instead of the ON clause.'
+
+  - id: transitive-006
+    clause: [RP-3, RP-4]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id, i.sku FROM purchase_order o JOIN order_item i ON i.order_id = o.id
+      WHERE (o.tenant_id = ? AND i.tenant_id = o.tenant_id) OR o.status = 'OPEN'
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: o
+        message: 'purchase_order (o) has no tenant filter. Add "o.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: order_item
+        alias: i
+        message: 'order_item (i) has no tenant filter. Add "i.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'A branch without any tenant filter defeats both the anchor and the transitive equality.'
+
+  - id: transitive-007
+    clause: [RP-3]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id, i.sku FROM purchase_order o
+      JOIN order_item i ON i.order_id = o.id AND o.tenant_id = i.tenant_id
+      WHERE i.tenant_id = ?
+    expect: []
+    reason: 'Propagation works in both directions: here the anchor is on the joined table.'
+
+  - id: transitive-008
+    clause: [RP-3, RP-7]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id FROM purchase_order o
+      JOIN (SELECT v.tenant_id FROM invoice v WHERE v.tenant_id = ?) x ON x.tenant_id = o.tenant_id
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: o
+        message: 'purchase_order (o) has no tenant filter. Add "o.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'A derived table is not an occurrence of a protected table, so it cannot anchor the outer table.'
+
+  - id: transitive-009
+    clause: [RP-3]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id FROM purchase_order o WHERE o.tenant_id = o.tenant_id
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: o
+        message: 'purchase_order (o) has no tenant filter. Add "o.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'An equality of a column with itself is always true and fences nothing.'
+
+  - id: transitive-010
+    clause: [RP-3]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id, i.sku FROM purchase_order o
+      JOIN order_item i ON i.order_id = o.id AND o.tenant_id = i.tenant_id
+      WHERE o.tenant_id = ?
+    expect: []
+    reason: 'Propagation works when the anchored occurrence is on the left of the equality.'

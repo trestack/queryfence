@@ -21,7 +21,9 @@ import dev.trestack.queryfence.core.SqlChecker;
 import dev.trestack.queryfence.core.Violation;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
+import java.util.Set;
 import net.sf.jsqlparser.statement.Statement;
 
 /** Default {@link SqlChecker}: parses once per SQL string, then applies every rule. */
@@ -29,6 +31,56 @@ public final class DefaultSqlChecker implements SqlChecker {
 
   /** Shared by all checkers: parse results do not depend on the policy. */
   private static final ParseCache PARSE_CACHE = new ParseCache(10_000);
+
+  /**
+   * Statements that carry no tenant data and that JSqlParser does not always understand (RP-13).
+   * When such a statement fails to parse it is ignored instead of reported: tests routinely run
+   * session setup and schema statements. Anything that could read or write rows stays fail closed.
+   */
+  private static final Set<String> IGNORED_WHEN_UNPARSEABLE =
+      Set.of(
+          "set",
+          "show",
+          "begin",
+          "start",
+          "commit",
+          "rollback",
+          "savepoint",
+          "release",
+          "use",
+          "explain",
+          "analyze",
+          "analyse",
+          "vacuum",
+          "discard",
+          "reset",
+          "lock",
+          "unlock",
+          "grant",
+          "revoke",
+          "create",
+          "alter",
+          "drop",
+          "truncate",
+          "comment",
+          "call",
+          "do",
+          "prepare",
+          "deallocate",
+          "execute",
+          "flush",
+          "checkpoint",
+          "describe",
+          "desc",
+          "pragma",
+          "attach",
+          "detach",
+          "refresh",
+          "cluster",
+          "reindex",
+          "listen",
+          "notify",
+          "copy");
 
   private final Policy policy;
 
@@ -41,6 +93,9 @@ public final class DefaultSqlChecker implements SqlChecker {
     Objects.requireNonNull(sql, "sql");
     ParseCache.Parsed parsed = PARSE_CACHE.get(sql);
     if (parsed.failed()) {
+      if (IGNORED_WHEN_UNPARSEABLE.contains(leadingKeyword(sql))) {
+        return List.of();
+      }
       return List.of(
           new Violation(
               null, null, Violation.Code.UNPARSEABLE, null, null, Messages.unparseable(), sql));
@@ -59,5 +114,29 @@ public final class DefaultSqlChecker implements SqlChecker {
       }
     }
     return List.copyOf(violations);
+  }
+
+  /** The first keyword of a statement, skipping leading comments and whitespace. */
+  private static String leadingKeyword(String sql) {
+    int i = 0;
+    while (i < sql.length()) {
+      char c = sql.charAt(i);
+      if (Character.isWhitespace(c)) {
+        i++;
+      } else if (sql.startsWith("--", i)) {
+        int end = sql.indexOf('\n', i);
+        i = end < 0 ? sql.length() : end + 1;
+      } else if (sql.startsWith("/*", i)) {
+        int end = sql.indexOf("*/", i);
+        i = end < 0 ? sql.length() : end + 2;
+      } else {
+        break;
+      }
+    }
+    int start = i;
+    while (i < sql.length() && Character.isLetter(sql.charAt(i))) {
+      i++;
+    }
+    return sql.substring(start, i).toLowerCase(Locale.ROOT);
   }
 }

@@ -1,0 +1,142 @@
+cases:
+  - id: parameters-001
+    clause: [RP-2]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT id FROM purchase_order WHERE tenant_id = :tenant
+    expect: []
+    reason: 'A named parameter is a value.'
+
+  - id: parameters-002
+    clause: [RP-2]
+    policy: default
+    dialect: postgres
+    sql: |-
+      SELECT id FROM purchase_order WHERE tenant_id = $1
+    expect: []
+    reason: 'A positional parameter is a value.'
+
+  - id: parameters-003
+    clause: [RP-2]
+    policy: default
+    dialect: postgres
+    sql: |-
+      SELECT id FROM purchase_order WHERE tenant_id = ?::bigint
+    expect: []
+    reason: 'A cast of a parameter is still a value.'
+
+  - id: parameters-004
+    clause: [RP-2]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT id FROM purchase_order WHERE tenant_id = CAST(? AS BIGINT)
+    expect: []
+    reason: 'An explicit CAST of a parameter is a value.'
+
+  - id: parameters-005
+    clause: [RP-2]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT id FROM purchase_order WHERE tenant_id = tenant_of(?)
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: null
+        message: 'purchase_order has no tenant filter. Add "purchase_order.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'A function call is not a value unless the rule lists it in allowedFunctions.'
+
+  - id: parameters-006
+    clause: [RP-2]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT id FROM purchase_order WHERE tenant_id = 'acme'
+    expect: []
+    reason: 'A string literal is a value.'
+
+  - id: parameters-007
+    clause: [RP-2]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT id FROM purchase_order WHERE tenant_id = NULL
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: null
+        message: 'purchase_order has no tenant filter. Add "purchase_order.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'NULL is not a value predicate: the comparison never matches a row.'
+
+  - id: parameters-008
+    clause: [RP-2]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT id FROM purchase_order WHERE tenant_id IN (?, 42)
+    expect: []
+    reason: 'An IN list of parameters and literals is a value predicate.'
+
+  - id: parameters-009
+    clause: [RP-2]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT id FROM purchase_order WHERE tenant_id IN (SELECT tenant_id FROM invoice WHERE tenant_id = ?)
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: null
+        message: 'purchase_order has no tenant filter. Add "purchase_order.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'IN with a subquery is not a value predicate, whatever the subquery selects.'
+
+  - id: parameters-010
+    clause: [RP-2]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id FROM purchase_order o WHERE o.tenant_id IN (?, o.status)
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: o
+        message: 'purchase_order (o) has no tenant filter. Add "o.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'An IN list that mixes a value and a column is not a value predicate.'
+
+  - id: parameters-011
+    clause: [RP-2]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id FROM purchase_order o WHERE o.tenant_id = -1
+    expect: []
+    reason: 'A signed literal is a value.'
+
+  - id: parameters-012
+    clause: [RP-2]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id FROM purchase_order o WHERE o.tenant_id = 1.5
+    expect: []
+    reason: 'A decimal literal is a value.'
+
+  - id: parameters-013
+    clause: [RP-2]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELECT o.id FROM purchase_order o WHERE o.tenant_id = CAST(o.status AS BIGINT)
+    expect:
+      - rule: tenant-isolation
+        code: MISSING_PREDICATE
+        table: purchase_order
+        alias: o
+        message: 'purchase_order (o) has no tenant filter. Add "o.tenant_id = ?" to the WHERE clause of the query block that uses it.'
+    reason: 'A cast of a column is not a value.'
