@@ -151,9 +151,16 @@ class LegacyReportingTest { }
 ```
 
 **Emergency exit.** `queryfence.enabled=false` (a Spring property, or `-Dqueryfence.enabled=false`
-for the JUnit extension) switches the checks off for that run. QueryFence then prints a loud
-warning on every run, because a check nobody notices is off is worse than no check. The right way
-to accept one known query is a suppression with a reason, not the switch.
+for the JUnit extension) switches the checks off for that run. Because a check nobody notices is
+off is worse than no check, QueryFence then:
+
+- prints a loud warning on the console,
+- writes `"disabled": true` with the reason into `target/queryfence/report.json`,
+- **fails the build when the `CI` environment variable is set**, unless you also set
+  `queryfence.allowDisabledInCi=true`. A pipeline that checks nothing should not look green, so
+  saying so has to be deliberate.
+
+The right way to accept one known query is a suppression with a reason, not the switch.
 
 ### 2. Run your tests
 

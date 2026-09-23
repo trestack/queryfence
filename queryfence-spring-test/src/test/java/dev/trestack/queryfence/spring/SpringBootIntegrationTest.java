@@ -89,6 +89,9 @@ class SpringBootIntegrationTest {
     try {
       run(DisabledCase.class).assertStatistics(stats -> stats.started(1).succeeded(1));
       assertThat(RunReport.instance().findings()).isEmpty();
+      assertThat(RunReport.instance().json())
+          .contains("\"disabled\":true")
+          .contains("the Spring test context of queryfence.yml");
     } finally {
       Disabled.reset();
     }
@@ -152,7 +155,9 @@ class SpringBootIntegrationTest {
     }
   }
 
-  @SpringBootTest(classes = ShopApplication.class, properties = "queryfence.enabled=false")
+  @SpringBootTest(
+      classes = ShopApplication.class,
+      properties = {"queryfence.enabled=false", "queryfence.allowDisabledInCi=true"})
   static class DisabledCase {
 
     @Autowired OrderRepository repository;

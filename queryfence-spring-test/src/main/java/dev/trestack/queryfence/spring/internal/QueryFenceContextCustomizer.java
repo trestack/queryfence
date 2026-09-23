@@ -40,8 +40,11 @@ final class QueryFenceContextCustomizer implements ContextCustomizer {
   @Override
   public void customizeContext(
       ConfigurableApplicationContext context, MergedContextConfiguration mergedConfig) {
-    if (!context.getEnvironment().getProperty(Disabled.PROPERTY, Boolean.class, Boolean.TRUE)) {
-      Disabled.announce("this Spring test context");
+    var environment = context.getEnvironment();
+    if (!environment.getProperty(Disabled.PROPERTY, Boolean.class, Boolean.TRUE)) {
+      Disabled.announce(
+          "the Spring test context of " + resource,
+          environment.getProperty(Disabled.ALLOW_IN_CI, Boolean.class, Boolean.FALSE));
       return;
     }
     FencedDataSources dataSources = new FencedDataSources(policy, resource);

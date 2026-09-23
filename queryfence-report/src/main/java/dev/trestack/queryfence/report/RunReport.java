@@ -87,6 +87,7 @@ public final class RunReport {
   private final Map<String, PolicyResults> results = new LinkedHashMap<>();
 
   private final AtomicBoolean hookRegistered = new AtomicBoolean();
+  private final Set<String> disabledReasons = new LinkedHashSet<>();
   private volatile Path reportFile = Path.of("target", "queryfence", "report.json");
 
   private RunReport() {}
@@ -124,6 +125,16 @@ public final class RunReport {
     }
   }
 
+  /** Records that QueryFence was switched off somewhere, so the report cannot look clean. */
+  public synchronized void disabled(String reason) {
+    disabledReasons.add(reason);
+    registerShutdownHook();
+  }
+
+  public synchronized boolean isDisabledSomewhere() {
+    return !disabledReasons.isEmpty();
+  }
+
   public synchronized List<PolicyResults> results() {
     return List.copyOf(results.values());
   }
@@ -137,7 +148,7 @@ public final class RunReport {
 
   /** Prints the summary and writes the JSON report. */
   public synchronized void flush() {
-    if (results.isEmpty()) {
+    if (results.isEmpty() && disabledReasons.isEmpty()) {
       return;
     }
     System.out.println(summary());
@@ -146,6 +157,9 @@ public final class RunReport {
 
   public synchronized String summary() {
     StringBuilder sb = new StringBuilder();
+    for (String reason : disabledReasons) {
+      sb.append("\nQueryFence was DISABLED: ").append(reason);
+    }
     for (PolicyResults group : results.values()) {
       sb.append("\nQueryFence [")
           .append(group.policy)
@@ -185,6 +199,10 @@ public final class RunReport {
     Json json = new Json();
     json.object();
     json.field("generatedAt", Instant.now().toString());
+    json.field("disabled", !disabledReasons.isEmpty());
+    json.key("disabledReasons").array();
+    disabledReasons.forEach(json::value);
+    json.end();
     json.key("policies").array();
     for (PolicyResults group : results.values()) {
       json.object();
@@ -231,5 +249,6 @@ public final class RunReport {
   /** Forgets everything recorded so far; mainly for QueryFence's own tests. */
   public synchronized void reset() {
     results.clear();
+    disabledReasons.clear();
   }
 }
