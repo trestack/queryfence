@@ -1,8 +1,14 @@
 name: Docs
 
 on:
+  # Build on every branch so a broken site is caught before it reaches main; deploy only from main.
   push:
-    branches: [main]
+    paths:
+      - docs/**
+      - mkdocs.yml
+      - CHANGELOG.md
+      - .github/workflows/docs.yml
+  pull_request:
     paths:
       - docs/**
       - mkdocs.yml
@@ -29,20 +35,26 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - name: Install MkDocs Material
-        run: pip install "mkdocs-material==9.7.7" "mkdocs<2"
+          cache-dependency-path: docs/requirements.txt
+      - name: Install the pinned documentation toolchain
+        run: pip install -r docs/requirements.txt
       - name: Publish the changelog as a page
         run: cp CHANGELOG.md docs/changelog.md
       - name: Build
         run: mkdocs build --strict
+
+      # Only the site built from main is published; other branches just prove it still builds.
       - uses: actions/configure-pages@v5
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
       - uses: actions/upload-pages-artifact@v3
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         with:
           path: site
 
   deploy:
     name: Deploy to GitHub Pages
     needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
