@@ -5,7 +5,8 @@
 # demonstrating anything. This script therefore expects a failing build that mentions QueryFence.
 #
 # It needs the databases the examples point at (localhost:3306 MySQL, localhost:5432 Postgres),
-# either from `docker compose up` in each example, or from CI service containers.
+# either from `docker compose up` in each example, or from CI service containers. Set
+# QF_MYSQL_URL or QF_POSTGRES_URL to point an example at a database somewhere else.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -18,8 +19,14 @@ status=0
 for example in mysql-mybatis postgres-jpa; do
   directory="$root/examples/$example"
   log="$(mktemp)"
+  case "$example" in
+    mysql-mybatis) url="${QF_MYSQL_URL:-}" ;;
+    postgres-jpa) url="${QF_POSTGRES_URL:-}" ;;
+  esac
+  override=()
+  [ -n "$url" ] && override=("-Dspring.datasource.url=$url")
   echo "==> $example"
-  if (cd "$directory" && "$mvnw" -B -ntp verify > "$log" 2>&1); then
+  if (cd "$directory" && "$mvnw" -B -ntp "${override[@]+"${override[@]}"}" verify > "$log" 2>&1); then
     echo "    FAILED: the build was green, but this example is supposed to ship a leak"
     tail -30 "$log"
     status=1
