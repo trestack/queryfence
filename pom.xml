@@ -59,7 +59,7 @@
     <datasource-proxy.version>1.11.0</datasource-proxy.version>
     <snakeyaml.version>2.7</snakeyaml.version>
     <h2.version>2.5.250</h2.version>
-    <spring.version>6.2.19</spring.version>
+    <spring.version>7.0.9</spring.version>
     <spring-boot.version>3.5.9</spring-boot.version>
     <testcontainers.version>1.21.4</testcontainers.version>
     <mybatis-spring-boot.version>3.0.5</mybatis-spring-boot.version>
