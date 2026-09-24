@@ -5,7 +5,8 @@
 > tests actually send to the database, and fails the build on the ones that break the rule,
 > pointing at the class, method and line that produced the query.
 
-Status: pre-release (0.1.0-SNAPSHOT), not on Maven Central yet. Apache-2.0. Java 17+.
+Status: 0.1.0, the first release. Coordinates: io.github.trestack:queryfence-*:0.1.0.
+Apache-2.0. Java 17+. The API is small but not frozen before 1.0.
 Repository: https://github.com/trestack/queryfence
 Docs: https://trestack.github.io/queryfence/
 

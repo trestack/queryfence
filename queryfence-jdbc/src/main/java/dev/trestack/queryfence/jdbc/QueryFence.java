@@ -39,12 +39,25 @@ public final class QueryFence {
 
   private QueryFence() {}
 
-  /** Wraps {@code dataSource}, resolving origins by skipping infrastructure frames. */
+  /**
+   * Wraps a data source, resolving origins by skipping infrastructure frames.
+   *
+   * @param dataSource the data source the code under test uses
+   * @param policy the rules to check the executed statements against
+   * @return a data source that records and checks, and passes the SQL on unchanged
+   */
   public static FencedDataSource wrap(DataSource dataSource, Policy policy) {
     return wrap(dataSource, policy, CaptureSettings.defaults());
   }
 
-  /** Wraps {@code dataSource} with explicit origin resolution settings. */
+  /**
+   * Wraps a data source with explicit origin resolution settings.
+   *
+   * @param dataSource the data source the code under test uses
+   * @param policy the rules to check the executed statements against
+   * @param settings how the origin of a statement is resolved
+   * @return a data source that records and checks, and passes the SQL on unchanged
+   */
   public static FencedDataSource wrap(
       DataSource dataSource, Policy policy, CaptureSettings settings) {
     Objects.requireNonNull(dataSource, "dataSource");

@@ -12,12 +12,16 @@
 <p align="center">
   <a href="https://github.com/trestack/queryfence/actions/workflows/ci.yml"><img src="https://github.com/trestack/queryfence/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License"></a>
+  <a href="https://trestack.github.io/queryfence/"><img src="https://img.shields.io/badge/docs-trestack.github.io-1F4D34.svg" alt="Documentation"></a>
 </p>
 
-> [!WARNING]
-> **Work in progress.** Nothing is published to Maven Central yet and the API may still change
-> before 0.1.0. CI tests QueryFence on JUnit 5.10 to 6.1 and Spring Boot 3.3 to 4.1; it has no real
-> users on Spring Boot 4 yet, so that combination is tested but not promised.
+> [!NOTE]
+> **0.1.0 is the first release.** The API is small on purpose, but it is not frozen: it may change
+> before 1.0, and every change lands in the [changelog](CHANGELOG.md). CI tests QueryFence on JUnit
+> 5.10 to 6.1 and Spring Boot 3.3 to 4.1; nobody runs it on Spring Boot 4 in anger yet, so that
+> combination is tested but not promised.
+>
+> Full documentation: **<https://trestack.github.io/queryfence/>**
 
 ## The problem
 
@@ -94,7 +98,9 @@ and [docs/ADOPTION.md](docs/ADOPTION.md) for putting it into a project that alre
 
 ## Installation
 
-> Not on Maven Central yet. Until 0.1.0 is released, build it locally with `./mvnw install`.
+> The coordinates below are 0.1.0. If it is not on Maven Central yet, or you want an unreleased
+> change, clone the repository and run `./mvnw install`, which puts `0.1.0-SNAPSHOT` in your local
+> repository.
 
 For a Spring Boot application:
 
@@ -102,7 +108,7 @@ For a Spring Boot application:
 <dependency>
   <groupId>io.github.trestack</groupId>
   <artifactId>queryfence-spring-test</artifactId>
-  <version>0.1.0-SNAPSHOT</version>
+  <version>0.1.0</version>
   <scope>test</scope>
 </dependency>
 ```
@@ -200,7 +206,7 @@ code under test uses:
 class OrderRepositoryTest {
 
   @RegisterExtension
-  static final QueryFenceExtension queryFence = QueryFenceExtension.fromClasspath("queryfence.yml");
+  static final QueryFenceExtension queryFence = QueryFenceExtension.fromClasspath();
 
   OrderRepository repository;
 
@@ -313,6 +319,7 @@ Honest limits of QueryFence:
 | [docs/ADOPTION.md](docs/ADOPTION.md) | putting QueryFence into an existing project, in REPORT mode |
 | [docs/DESIGN.md](docs/DESIGN.md) | exact rule semantics, known bypasses and limits |
 | [tools/queryfence-summary.py](tools/queryfence-summary.py) | summarises `report.json` by rule, table, code and origin |
+| [docs/RELEASE.md](docs/RELEASE.md) | how a release is cut (maintainer only) |
 
 ## Status and roadmap
 

@@ -11,6 +11,7 @@
   <packaging>pom</packaging>
   <name>QueryFence BOM</name>
   <description>Bill of materials to align versions of all QueryFence modules.</description>
+  <url>https://github.com/trestack/queryfence</url>
 
   <dependencyManagement>
     <dependencies>
@@ -26,7 +27,17 @@
       </dependency>
       <dependency>
         <groupId>io.github.trestack</groupId>
+        <artifactId>queryfence-report</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.github.trestack</groupId>
         <artifactId>queryfence-junit5</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.github.trestack</groupId>
+        <artifactId>queryfence-spring-test</artifactId>
         <version>${project.version}</version>
       </dependency>
     </dependencies>

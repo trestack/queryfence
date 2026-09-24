@@ -10,6 +10,7 @@
   <artifactId>queryfence-core</artifactId>
   <name>QueryFence :: core</name>
   <description>Framework-agnostic SQL parser and rule engine. Depends only on JSqlParser.</description>
+  <url>https://github.com/trestack/queryfence</url>
 
   <dependencies>
     <dependency>

@@ -66,6 +66,7 @@ nav:
   - Comparison: comparison.md
   - FAQ: faq.md
   - Changelog: changelog.md
+  - Releasing: RELEASE.md
 
 not_in_nav: |
   decisions/

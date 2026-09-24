@@ -10,6 +10,7 @@
   <artifactId>queryfence-report</artifactId>
   <name>QueryFence :: report</name>
   <description>Collects the findings of a test run and writes the console summary and report.json.</description>
+  <url>https://github.com/trestack/queryfence</url>
 
   <dependencies>
     <dependency>

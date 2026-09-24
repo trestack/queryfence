@@ -21,9 +21,9 @@ import dev.trestack.queryfence.jdbc.CaptureSettings;
 import dev.trestack.queryfence.jdbc.FencedDataSource;
 import dev.trestack.queryfence.jdbc.QueryFence;
 import dev.trestack.queryfence.jdbc.QueryRecorder.Finding;
-import dev.trestack.queryfence.report.Disabled;
-import dev.trestack.queryfence.report.Findings;
-import dev.trestack.queryfence.report.RunReport;
+import dev.trestack.queryfence.report.internal.Disabled;
+import dev.trestack.queryfence.report.internal.Findings;
+import dev.trestack.queryfence.report.internal.RunReport;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -68,23 +68,45 @@ public final class QueryFenceExtension
     RunReport.instance().registerShutdownHook();
   }
 
-  /** Loads {@value PolicyFile#DEFAULT_RESOURCE} from the classpath. */
+  /**
+   * Loads {@value PolicyFile#DEFAULT_RESOURCE} from the classpath.
+   *
+   * @return an extension checking that policy
+   * @throws IllegalStateException when the policy is missing or invalid
+   */
   public static QueryFenceExtension fromClasspath() {
     return fromClasspath(PolicyFile.DEFAULT_RESOURCE);
   }
 
-  /** Loads a policy from the classpath. */
+  /**
+   * Loads a policy from the classpath.
+   *
+   * @param resource the policy resource, for example {@code queryfence-legacy.yml}
+   * @return an extension checking that policy
+   * @throws IllegalStateException when the policy is missing or invalid
+   */
   public static QueryFenceExtension fromClasspath(String resource) {
     return new QueryFenceExtension(
         PolicyFile.fromClasspath(resource), resource, CaptureSettings.defaults());
   }
 
-  /** Uses a policy built in Java. */
+  /**
+   * Uses a policy built in Java.
+   *
+   * @param policy the rules to check
+   * @return an extension checking that policy
+   */
   public static QueryFenceExtension of(Policy policy) {
     return of(policy, CaptureSettings.defaults());
   }
 
-  /** Uses a policy built in Java, with explicit origin resolution settings. */
+  /**
+   * Uses a policy built in Java, with explicit origin resolution settings.
+   *
+   * @param policy the rules to check
+   * @param captureSettings how the origin of a statement is resolved
+   * @return an extension checking that policy
+   */
   public static QueryFenceExtension of(Policy policy, CaptureSettings captureSettings) {
     return new QueryFenceExtension(policy, INLINE_POLICY, captureSettings);
   }
@@ -93,6 +115,9 @@ public final class QueryFenceExtension
    * Wraps a data source so the statements the test executes through it are checked. When {@code
    * -Dqueryfence.enabled=false} is set, the data source is returned unchanged and a warning is
    * printed.
+   *
+   * @param dataSource the data source the code under test uses
+   * @return the data source to hand to the code under test
    */
   public DataSource wrap(DataSource dataSource) {
     if (!enabled()) {
@@ -110,6 +135,11 @@ public final class QueryFenceExtension
     return !"false".equalsIgnoreCase(System.getProperty(Disabled.PROPERTY));
   }
 
+  /**
+   * The policy this extension checks.
+   *
+   * @return the policy
+   */
   public Policy policy() {
     return policy;
   }

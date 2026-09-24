@@ -24,7 +24,12 @@ import java.util.List;
  */
 public interface SqlChecker {
 
-  /** Creates a checker for the given policy. */
+  /**
+   * Creates a checker for a policy.
+   *
+   * @param policy the rules to check against
+   * @return a thread-safe checker
+   */
   static SqlChecker of(Policy policy) {
     return new DefaultSqlChecker(policy);
   }
@@ -33,6 +38,7 @@ public interface SqlChecker {
    * Checks one SQL string, which may hold several statements separated by {@code ;}. Suppressions
    * are not applied here, because they depend on where the statement came from.
    *
+   * @param sql the statement, exactly as it would reach the driver
    * @return the violations, empty when the SQL satisfies every rule
    */
   List<Violation> check(String sql);

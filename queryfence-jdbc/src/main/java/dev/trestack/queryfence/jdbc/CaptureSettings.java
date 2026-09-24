@@ -38,12 +38,22 @@ public final class CaptureSettings {
     this.basePackages = basePackages;
   }
 
-  /** Resolve the origin by skipping infrastructure frames. */
+  /**
+   * Resolves the origin by skipping infrastructure frames.
+   *
+   * @return the default settings
+   */
   public static CaptureSettings defaults() {
     return DEFAULTS;
   }
 
-  /** Resolve the origin as the first frame in one of these packages. */
+  /**
+   * Resolves the origin as the first stack frame in one of these packages.
+   *
+   * @param basePackages your own package prefixes, for example {@code com.acme}
+   * @return settings that report {@link Origin#unknown()} when no frame matches
+   * @throws IllegalArgumentException if a package is blank
+   */
   public static CaptureSettings ofBasePackages(String... basePackages) {
     Objects.requireNonNull(basePackages, "basePackages");
     for (String basePackage : basePackages) {
@@ -54,6 +64,11 @@ public final class CaptureSettings {
     return new CaptureSettings(List.of(basePackages));
   }
 
+  /**
+   * The packages the origin must come from.
+   *
+   * @return an unmodifiable list, empty when infrastructure frames are skipped instead
+   */
   public List<String> basePackages() {
     return basePackages;
   }

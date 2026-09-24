@@ -12,7 +12,7 @@ Budget: about an hour for steps 1 to 3, then as long as your triage list deserve
 <dependency>
   <groupId>io.github.trestack</groupId>
   <artifactId>queryfence-spring-test</artifactId>
-  <version>0.1.0-SNAPSHOT</version>
+  <version>0.1.0</version>
   <scope>test</scope>
 </dependency>
 ```

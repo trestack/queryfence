@@ -39,7 +39,11 @@ public final class QueryRecorder {
     this.checker = SqlChecker.of(policy);
   }
 
-  /** The statements recorded so far, oldest first. */
+  /**
+   * The statements recorded so far.
+   *
+   * @return an unmodifiable snapshot, oldest first
+   */
   public List<CapturedStatement> statements() {
     return List.copyOf(statements);
   }
@@ -49,6 +53,11 @@ public final class QueryRecorder {
     statements.clear();
   }
 
+  /**
+   * The policy these statements are checked against.
+   *
+   * @return the policy given to {@link QueryFence#wrap(javax.sql.DataSource, Policy)}
+   */
   public Policy policy() {
     return policy;
   }
@@ -56,6 +65,8 @@ public final class QueryRecorder {
   /**
    * The violations of the recorded statements, each with the code that produced it. Suppressions of
    * the policy are applied here, because they are keyed by origin.
+   *
+   * @return an unmodifiable list, empty when every statement satisfied the policy
    */
   public List<Finding> findings() {
     List<Finding> findings = new ArrayList<>();
@@ -86,9 +97,19 @@ public final class QueryRecorder {
     statements.add(statement);
   }
 
-  /** A violation together with the statement and the code that produced it. */
+  /**
+   * A violation together with the statement and the code that produced it.
+   *
+   * @param violation what the rule engine found
+   * @param statement the statement it was found in, with its origin
+   */
   public record Finding(Violation violation, CapturedStatement statement) {
 
+    /**
+     * The code that produced the statement.
+     *
+     * @return the origin of {@link #statement()}
+     */
     public Origin origin() {
       return statement.origin();
     }

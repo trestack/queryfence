@@ -9,7 +9,7 @@
 
   <name>QueryFence</name>
   <description>SQL policy testing for the JVM. Catch tenant leaks, unbounded updates and unsafe queries in your integration tests.</description>
-  <url>https://github.com/trestack/queryfence</url>
+  <url child.project.url.inherit.append.path="false">https://github.com/trestack/queryfence</url>
   <inceptionYear>2026</inceptionYear>
 
   <!-- ===== Metadata required by Maven Central ===== -->
@@ -38,7 +38,7 @@
     <module>queryfence-spring-test</module>
     <module>queryfence-integration-tests</module>
   </modules>
-  <scm>
+  <scm child.scm.connection.inherit.append.path="false" child.scm.developerConnection.inherit.append.path="false" child.scm.url.inherit.append.path="false">
     <connection>scm:git:https://github.com/trestack/queryfence.git</connection>
     <developerConnection>scm:git:ssh://git@github.com/trestack/queryfence.git</developerConnection>
     <tag>HEAD</tag>
@@ -199,6 +199,17 @@
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-jar-plugin</artifactId>
           <version>${jar-plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-javadoc-plugin</artifactId>
+          <version>${javadoc-plugin.version}</version>
+          <configuration>
+            <!-- The published Javadoc is the public API; internal packages carry no promises. -->
+            <excludePackageNames>*.internal</excludePackageNames>
+            <notimestamp>true</notimestamp>
+            <quiet>true</quiet>
+          </configuration>
         </plugin>
       </plugins>
     </pluginManagement>

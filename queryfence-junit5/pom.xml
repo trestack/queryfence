@@ -10,6 +10,7 @@
   <artifactId>queryfence-junit5</artifactId>
   <name>QueryFence :: junit5</name>
   <description>JUnit 5 extension that fails tests on SQL policy violations and writes reports.</description>
+  <url>https://github.com/trestack/queryfence</url>
 
   <dependencies>
     <dependency>

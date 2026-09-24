@@ -20,8 +20,8 @@ import static org.junit.platform.engine.discovery.DiscoverySelectors.selectClass
 
 import com.acme.shop.OrderRepository;
 import com.acme.shop.ShopApplication;
-import dev.trestack.queryfence.report.Disabled;
-import dev.trestack.queryfence.report.RunReport;
+import dev.trestack.queryfence.report.internal.Disabled;
+import dev.trestack.queryfence.report.internal.RunReport;
 import java.nio.file.Path;
 import java.util.Optional;
 import javax.sql.DataSource;
