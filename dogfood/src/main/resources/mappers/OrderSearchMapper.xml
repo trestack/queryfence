@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+    "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.northwind.shop.mapper.OrderSearchMapper">
+
+  <select id="search" resultType="map">
+    select o.id, o.status, o.total
+    from purchase_order o
+    <where>
+      <if test="tenantId != null">o.tenant_id = #{tenantId}</if>
+      <if test="status != null">and o.status = #{status}</if>
+      <if test="minTotal != null">and o.total &gt;= #{minTotal}</if>
+      and o.deleted_at is null
+    </where>
+    order by o.id
+  </select>
+
+  <select id="searchWithInvoice" resultType="map">
+    select o.id, o.total, i.number, i.status as invoice_status
+    from purchase_order o
+    join invoice i on i.order_id = o.id and i.tenant_id = o.tenant_id
+    where o.tenant_id = #{tenantId}
+    <if test="status != null">and i.status = #{status}</if>
+  </select>
+
+  <select id="countByStatus" resultType="map">
+    select o.status, count(*) as orders, sum(o.total) as total
+    from purchase_order o
+    where o.tenant_id = #{tenantId} and o.deleted_at is null
+    group by o.status
+    having count(*) &gt; 0
+  </select>
+
+  <select id="itemsOfOrders" resultType="map">
+    select it.order_id, it.product_id, it.quantity
+    from order_item it
+    where it.tenant_id = #{tenantId}
+      and it.order_id in
+      <foreach item="id" collection="orderIds" open="(" separator="," close=")">#{id}</foreach>
+  </select>
+
+  <!-- CSV export for the order list. The join to customer was added for the name column. -->
+  <select id="exportRows" resultType="map">
+    select o.id, o.total, c.name as customer
+    from purchase_order o
+    join customer c on c.id = o.customer_id
+    where o.tenant_id = #{tenantId}
+    order by o.id
+  </select>
+</mapper>
