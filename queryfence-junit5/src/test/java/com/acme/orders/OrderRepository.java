@@ -34,7 +34,8 @@ public final class OrderRepository {
 
   public void createSchema() {
     jdbc.execute(
-        "CREATE TABLE purchase_order (id BIGINT PRIMARY KEY, tenant_id BIGINT, status VARCHAR(32))");
+        "CREATE TABLE purchase_order (id BIGINT PRIMARY KEY, tenant_id BIGINT,"
+            + " status VARCHAR(32), number VARCHAR(32))");
   }
 
   public void insert(long id, long tenantId, String status) {
@@ -55,6 +56,18 @@ public final class OrderRepository {
   public List<Map<String, Object>> findByStatus(long tenantId, String status) {
     lastLine = here() + 1;
     return jdbc.queryForList("SELECT id FROM purchase_order WHERE status = ?", status);
+  }
+
+  /**
+   * Valid SQL that JSqlParser 5.4 cannot read, because {@code number} is unqualified. The statement
+   * is properly fenced, so it is the shape of a false positive: QueryFence can only say it could
+   * not check it.
+   */
+  public int renumber(long tenantId) {
+    lastLine = here() + 1;
+    return jdbc.update(
+        "UPDATE purchase_order SET number = 'INV' WHERE number IS NULL AND tenant_id = ?",
+        tenantId);
   }
 
   public int closeAll() {

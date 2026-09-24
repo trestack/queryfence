@@ -96,6 +96,7 @@ class CaptureTest {
             });
   }
 
+  /** A lambda is reported as the method that contains it, not as its synthetic name. */
   @Test
   void findsTheApplicationFrameThroughFrameworkCallbacks() {
     repository.findByStatusInCallback("OPEN");
@@ -106,8 +107,13 @@ class CaptureTest {
         .satisfies(
             statement -> {
               assertThat(statement.origin().className()).isEqualTo(OrderRepository.class.getName());
-              assertThat(statement.origin().methodName())
-                  .isEqualTo("lambda$findByStatusInCallback$0");
+              assertThat(statement.origin().methodName()).isEqualTo("findByStatusInCallback");
+              assertThat(statement.origin().toString())
+                  .isEqualTo(
+                      "com.acme.orders.OrderRepository#findByStatusInCallback"
+                          + " (OrderRepository.java:"
+                          + statement.origin().lineNumber()
+                          + ")");
               assertThat(statement.origin().lineNumber()).isGreaterThan(expectedLine);
             });
   }

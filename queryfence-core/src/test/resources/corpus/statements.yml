@@ -76,12 +76,12 @@ cases:
     sql: |-
       SELEKT * FROM purchase_order
     expect:
-      - rule: null
+      - rule: parser
         code: UNPARSEABLE
-        table: null
+        table: purchase_order
         alias: null
-        message: 'QueryFence could not parse this statement, so it cannot prove it safe. Report the SQL to QueryFence, or set onUnparseable: REPORT to only report it.'
-    reason: 'SQL we cannot parse is a violation by default (fail closed).'
+        message: 'QueryFence could not parse this statement, so it cannot prove it safe. It mentions purchase_order, which stays unverified here: a missing filter on that table would go unnoticed. Report the SQL to QueryFence, or set onUnparseable: REPORT to only report it.'
+    reason: 'SQL we cannot parse is a violation by default (fail closed), and the finding names the protected table it mentions so a parser failure cannot hide it.'
 
   - id: statements-008
     clause: [RP-13]
@@ -127,12 +127,12 @@ cases:
     sql: |-
       UPDATE purchase_order SET
     expect:
-      - rule: null
+      - rule: parser
         code: UNPARSEABLE
-        table: null
+        table: purchase_order
         alias: null
-        message: 'QueryFence could not parse this statement, so it cannot prove it safe. Report the SQL to QueryFence, or set onUnparseable: REPORT to only report it.'
-    reason: 'An unparseable statement that could write rows stays fail closed.'
+        message: 'QueryFence could not parse this statement, so it cannot prove it safe. It mentions purchase_order, which stays unverified here: a missing filter on that table would go unnoticed. Report the SQL to QueryFence, or set onUnparseable: REPORT to only report it.'
+    reason: 'An unparseable statement that could write rows stays fail closed, and names the table it would write.'
 
   - id: statements-013
     clause: [RP-13]
@@ -166,3 +166,78 @@ cases:
         alias: null
         message: 'INSERT into purchase_order does not set tenant_id. Add tenant_id to the column list and bind the current tenant.'
     reason: 'UPSERT without the tenant column is a violation.'
+
+  - id: statements-016
+    clause: [RP-13]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELEKT * FROM currency
+    expect:
+      - rule: parser
+        code: UNPARSEABLE
+        table: null
+        alias: null
+        message: 'QueryFence could not parse this statement, so it cannot prove it safe. Report the SQL to QueryFence, or set onUnparseable: REPORT to only report it.'
+    reason: 'An unparseable statement that mentions no protected table carries no table.'
+
+  - id: statements-017
+    clause: [RP-13]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELEKT o.id FROM purchase_order o JOIN invoice i ON i.order_id = o.id
+    expect:
+      - rule: parser
+        code: UNPARSEABLE
+        table: purchase_order
+        alias: null
+        message: 'QueryFence could not parse this statement, so it cannot prove it safe. It mentions purchase_order, which stays unverified here: a missing filter on that table would go unnoticed. Report the SQL to QueryFence, or set onUnparseable: REPORT to only report it.'
+      - rule: parser
+        code: UNPARSEABLE
+        table: invoice
+        alias: null
+        message: 'QueryFence could not parse this statement, so it cannot prove it safe. It mentions invoice, which stays unverified here: a missing filter on that table would go unnoticed. Report the SQL to QueryFence, or set onUnparseable: REPORT to only report it.'
+    reason: 'One finding per protected table the unparseable statement mentions, in the order the policy declares them.'
+
+  - id: statements-018
+    clause: [RP-13]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELEKT * FROM purchase_order_archive
+    expect:
+      - rule: parser
+        code: UNPARSEABLE
+        table: null
+        alias: null
+        message: 'QueryFence could not parse this statement, so it cannot prove it safe. Report the SQL to QueryFence, or set onUnparseable: REPORT to only report it.'
+    reason: 'A table name is matched as a whole identifier: purchase_order_archive is another table.'
+
+  - id: statements-019
+    clause: [RP-13]
+    policy: default
+    dialect: postgres
+    sql: |-
+      UPDATE app."purchase_order" SET
+    expect:
+      - rule: parser
+        code: UNPARSEABLE
+        table: purchase_order
+        alias: null
+        message: 'QueryFence could not parse this statement, so it cannot prove it safe. It mentions purchase_order, which stays unverified here: a missing filter on that table would go unnoticed. Report the SQL to QueryFence, or set onUnparseable: REPORT to only report it.'
+    reason: 'Schema qualification and quoting do not hide the table.'
+
+  - id: statements-020
+    clause: [RP-13]
+    policy: default
+    dialect: ansi
+    sql: |-
+      SELEKT 'purchase_order' AS source FROM currency
+    expect:
+      - rule: parser
+        code: UNPARSEABLE
+        table: null
+        alias: null
+        message: 'QueryFence could not parse this statement, so it cannot prove it safe. Report the SQL to QueryFence, or set onUnparseable: REPORT to only report it.'
+    reason: 'A table name inside a string literal is text, not a table reference.'

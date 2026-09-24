@@ -61,7 +61,10 @@ measurement — do not fix them. Results: `dogfood/DOGFOOD-REPORT.md`.
    package, which the published Javadoc excludes. Prefer interfaces + static factories over
    exposing implementation classes. Every public type and member carries Javadoc: the release
    build must produce zero Javadoc warnings.
-5. Parse results are cached by SQL string.
+5. Parse results are cached by SQL string, and a policy file is read once per JVM.
+6. The console summary is printed when the JUnit test plan ends (a platform
+   `TestExecutionListener` registered through `META-INF/services`), never only from a JVM shutdown
+   hook: Surefire stops relaying the forked JVM's output before the hook runs.
 
 ## Rule semantics: `require-predicate`
 
@@ -91,7 +94,10 @@ and INSERT...SELECT sources — is *fenced* by the conditions of its own query b
   `findByIdAndTenantId` or `@TenantId`, not a WHERE clause.
 
 INSERT: the column must be present in the column list. DDL and TRUNCATE are ignored; MERGE on a
-protected table is `UNSUPPORTED_STATEMENT`.
+protected table is `UNSUPPORTED_STATEMENT`. An unparseable DML statement is a violation with the
+rule id `parser`, one per protected table it mentions (found by scanning the raw SQL), and it is
+governed by `onUnparseable`, not by `mode` — the decision is per finding, through
+`Policy.modeFor(code)`.
 Identifiers compare case-insensitively; handle quoted identifiers (MySQL backticks,
 Postgres double quotes) and schema-qualified names (`app.purchase_order`).
 Every violation message states the problem **and the fix**, from fixed templates in DESIGN.md.

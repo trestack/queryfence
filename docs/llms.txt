@@ -31,7 +31,7 @@ is wrapped automatically. Without Spring, use queryfence-junit5 with
 ```yaml
 version: 1
 mode: FAIL              # or REPORT (collect only)
-onUnparseable: FAIL     # or REPORT
+onUnparseable: FAIL     # or REPORT; governs UNPARSEABLE findings only, not `mode`
 rules:
   - id: tenant-isolation
     type: require-predicate

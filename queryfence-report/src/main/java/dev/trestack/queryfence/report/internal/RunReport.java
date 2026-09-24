@@ -16,6 +16,8 @@
 package dev.trestack.queryfence.report.internal;
 
 import dev.trestack.queryfence.core.Mode;
+import dev.trestack.queryfence.core.Policy;
+import dev.trestack.queryfence.core.Suppression;
 import dev.trestack.queryfence.jdbc.QueryRecorder.Finding;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -50,14 +52,15 @@ public final class RunReport {
   public static final class PolicyResults {
 
     private final String policy;
-    private final Mode mode;
+    private final Policy declared;
     private final Set<String> tests = new LinkedHashSet<>();
     private final List<ReportedFinding> findings = new ArrayList<>();
+    private final Set<Suppression> matchedSuppressions = new LinkedHashSet<>();
     private int statements;
 
-    private PolicyResults(String policy, Mode mode) {
+    private PolicyResults(String policy, Policy declared) {
       this.policy = policy;
-      this.mode = mode;
+      this.declared = declared;
     }
 
     public String policy() {
@@ -65,7 +68,22 @@ public final class RunReport {
     }
 
     public Mode mode() {
-      return mode;
+      return declared.mode();
+    }
+
+    public Mode onUnparseable() {
+      return declared.onUnparseable();
+    }
+
+    /**
+     * The suppressions of this policy that silenced nothing during the run. A suppression that
+     * matches nothing is usually a suppression whose code has moved, and it is the one thing a
+     * policy file cannot tell you by reading it.
+     */
+    public List<Suppression> unmatchedSuppressions() {
+      return declared.suppressions().stream()
+          .filter(suppression -> !matchedSuppressions.contains(suppression))
+          .toList();
     }
 
     public List<ReportedFinding> findings() {
@@ -87,6 +105,7 @@ public final class RunReport {
   private final Map<String, PolicyResults> results = new LinkedHashMap<>();
 
   private final AtomicBoolean hookRegistered = new AtomicBoolean();
+  private boolean dirty;
   private final Set<String> disabledReasons = new LinkedHashSet<>();
   private volatile Path reportFile = Path.of("target", "queryfence", "report.json");
 
@@ -115,19 +134,28 @@ public final class RunReport {
 
   /** Records what one test executed under one policy. */
   public synchronized void add(
-      String policy, Mode mode, String test, List<Finding> testFindings, int executedStatements) {
+      String policy,
+      Policy declared,
+      String test,
+      List<Finding> testFindings,
+      int executedStatements,
+      Set<Suppression> matchedSuppressions) {
     PolicyResults group =
-        results.computeIfAbsent(policy + "/" + mode, key -> new PolicyResults(policy, mode));
+        results.computeIfAbsent(
+            policy + "/" + declared.mode(), key -> new PolicyResults(policy, declared));
     group.tests.add(test);
     group.statements += executedStatements;
+    group.matchedSuppressions.addAll(matchedSuppressions);
     for (Finding finding : testFindings) {
       group.findings.add(new ReportedFinding(test, finding));
     }
+    dirty = true;
   }
 
   /** Records that QueryFence was switched off somewhere, so the report cannot look clean. */
   public synchronized void disabled(String reason) {
     disabledReasons.add(reason);
+    dirty = true;
     registerShutdownHook();
   }
 
@@ -151,6 +179,11 @@ public final class RunReport {
     if (results.isEmpty() && disabledReasons.isEmpty()) {
       return;
     }
+    if (!dirty) {
+      // Already printed and written; nothing has happened since.
+      return;
+    }
+    dirty = false;
     System.out.println(summary());
     write();
   }
@@ -164,7 +197,7 @@ public final class RunReport {
       sb.append("\nQueryFence [")
           .append(group.policy)
           .append(", mode ")
-          .append(group.mode)
+          .append(group.mode())
           .append("]: ")
           .append(group.findings.size())
           .append(group.findings.size() == 1 ? " violation in " : " violations in ")
@@ -172,9 +205,26 @@ public final class RunReport {
           .append(group.tests.size() == 1 ? " test" : " tests")
           .append(" (")
           .append(group.statements)
-          .append(" statements checked)");
+          .append(" statements checked, unparseable ")
+          .append(group.onUnparseable())
+          .append(")");
       for (ReportedFinding reported : group.findings) {
         sb.append("\n\n").append(Findings.format(reported.finding(), reported.test()));
+      }
+      List<Suppression> unmatched = group.unmatchedSuppressions();
+      if (!unmatched.isEmpty()) {
+        sb.append("\n\n  ")
+            .append(
+                unmatched.size() == 1
+                    ? "1 suppression matched nothing; the code it names has probably moved:"
+                    : unmatched.size()
+                        + " suppressions matched nothing; the code they name has probably moved:");
+        for (Suppression suppression : unmatched) {
+          sb.append("\n    ")
+              .append(suppression.ruleId())
+              .append(" at ")
+              .append(suppression.origin());
+        }
       }
     }
     if (!findings().isEmpty()) {
@@ -207,7 +257,8 @@ public final class RunReport {
     for (PolicyResults group : results.values()) {
       json.object();
       json.field("policy", group.policy);
-      json.field("mode", group.mode.name());
+      json.field("mode", group.mode().name());
+      json.field("onUnparseable", group.onUnparseable().name());
       json.key("summary").object();
       json.field("tests", group.tests.size());
       json.field("statements", group.statements);
@@ -215,6 +266,15 @@ public final class RunReport {
       json.end();
       json.key("findings").array();
       group.findings.forEach(reported -> writeFinding(json, reported));
+      json.end();
+      json.key("unmatchedSuppressions").array();
+      for (Suppression suppression : group.unmatchedSuppressions()) {
+        json.object();
+        json.field("rule", suppression.ruleId());
+        json.field("origin", suppression.origin());
+        json.field("reason", suppression.reason());
+        json.end();
+      }
       json.end();
       json.end();
     }
@@ -250,5 +310,6 @@ public final class RunReport {
   public synchronized void reset() {
     results.clear();
     disabledReasons.clear();
+    dirty = false;
   }
 }

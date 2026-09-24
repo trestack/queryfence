@@ -34,6 +34,23 @@ class PolicyTest {
   }
 
   @Test
+  void governsUnparseableStatementsWithOnUnparseableAndEverythingElseWithMode() {
+    Policy failButReportUnparseable =
+        Policy.builder().mode(Mode.FAIL).onUnparseable(Mode.REPORT).updateWithoutWhere("u").build();
+
+    assertThat(failButReportUnparseable.modeFor(Violation.Code.UNPARSEABLE)).isEqualTo(Mode.REPORT);
+    assertThat(failButReportUnparseable.modeFor(Violation.Code.MISSING_PREDICATE))
+        .isEqualTo(Mode.FAIL);
+
+    Policy reportButFailUnparseable =
+        Policy.builder().mode(Mode.REPORT).onUnparseable(Mode.FAIL).updateWithoutWhere("u").build();
+
+    assertThat(reportButFailUnparseable.modeFor(Violation.Code.UNPARSEABLE)).isEqualTo(Mode.FAIL);
+    assertThat(reportButFailUnparseable.modeFor(Violation.Code.MISSING_PREDICATE))
+        .isEqualTo(Mode.REPORT);
+  }
+
+  @Test
   void exposesRulesInDeclarationOrder() {
     Policy policy =
         Policy.builder()

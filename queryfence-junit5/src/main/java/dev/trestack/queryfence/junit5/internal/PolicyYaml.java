@@ -34,7 +34,7 @@ public final class PolicyYaml {
 
   private static final int SUPPORTED_VERSION = 1;
   private static final Set<String> ROOT_KEYS =
-      Set.of("version", "mode", "onUnparseable", "rules", "suppressions");
+      Set.of("version", "mode", "onUnparseable", "basePackages", "rules", "suppressions");
   private static final Set<String> RULE_KEYS =
       Set.of("id", "type", "column", "tables", "allowedFunctions", "primaryKey");
   private static final Set<String> SUPPRESSION_KEYS = Set.of("rule", "origin", "reason");
@@ -45,7 +45,31 @@ public final class PolicyYaml {
     this.resource = resource;
   }
 
-  public Policy read(InputStream in) {
+  /**
+   * What one policy file declares: the policy itself, and the base packages the capture side uses
+   * to resolve origins. The packages are not part of {@link Policy} on purpose — the engine knows
+   * nothing about stack traces.
+   *
+   * @param policy the policy
+   * @param basePackages the base packages, empty when the file names none
+   */
+  public record Parsed(Policy policy, List<String> basePackages) {}
+
+  /**
+   * Reads the policy, naming the file in every error. Errors raised by the policy model itself are
+   * wrapped too: a mistake in a hand-written file must say which file it is in.
+   */
+  public Parsed read(InputStream in) {
+    try {
+      return parse(in);
+    } catch (IllegalStateException alreadyNamesTheFile) {
+      throw alreadyNamesTheFile;
+    } catch (RuntimeException e) {
+      throw invalid(e);
+    }
+  }
+
+  private Parsed parse(InputStream in) {
     Object loaded = new Yaml(new SafeConstructor(new LoaderOptions())).load(in);
     if (loaded == null) {
       throw error("is empty");
@@ -87,8 +111,12 @@ public final class PolicyYaml {
             required(suppression, "reason", "a suppression"));
       }
     }
+    List<String> basePackages =
+        root.get("basePackages") == null
+            ? List.of()
+            : strings(root.get("basePackages"), "basePackages");
     try {
-      return builder.build();
+      return new Parsed(builder.build(), basePackages);
     } catch (IllegalArgumentException e) {
       throw error(e.getMessage());
     }
@@ -192,5 +220,11 @@ public final class PolicyYaml {
 
   private IllegalStateException error(String problem) {
     return new IllegalStateException("QueryFence policy " + resource + " " + problem);
+  }
+
+  private IllegalStateException invalid(RuntimeException cause) {
+    String problem = cause.getMessage() == null ? cause.toString() : cause.getMessage();
+    return new IllegalStateException(
+        "QueryFence policy " + resource + " is invalid: " + problem, cause);
   }
 }

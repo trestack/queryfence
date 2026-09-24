@@ -48,6 +48,7 @@ public final class QueryFenceContextCustomizerFactory implements ContextCustomiz
       }
       return null; // no policy, nothing to check
     }
-    return new QueryFenceContextCustomizer(resource, PolicyFile.fromClasspath(resource));
+    return new QueryFenceContextCustomizer(
+        resource, PolicyFile.fromClasspath(resource), PolicyFile.captureSettings(resource));
   }
 }

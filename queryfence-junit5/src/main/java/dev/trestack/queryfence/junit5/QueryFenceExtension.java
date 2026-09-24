@@ -15,8 +15,8 @@
  */
 package dev.trestack.queryfence.junit5;
 
-import dev.trestack.queryfence.core.Mode;
 import dev.trestack.queryfence.core.Policy;
+import dev.trestack.queryfence.core.Suppression;
 import dev.trestack.queryfence.jdbc.CaptureSettings;
 import dev.trestack.queryfence.jdbc.FencedDataSource;
 import dev.trestack.queryfence.jdbc.QueryFence;
@@ -25,8 +25,10 @@ import dev.trestack.queryfence.report.internal.Disabled;
 import dev.trestack.queryfence.report.internal.Findings;
 import dev.trestack.queryfence.report.internal.RunReport;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.extension.AfterTestExecutionCallback;
@@ -87,7 +89,7 @@ public final class QueryFenceExtension
    */
   public static QueryFenceExtension fromClasspath(String resource) {
     return new QueryFenceExtension(
-        PolicyFile.fromClasspath(resource), resource, CaptureSettings.defaults());
+        PolicyFile.fromClasspath(resource), resource, PolicyFile.captureSettings(resource));
   }
 
   /**
@@ -152,18 +154,21 @@ public final class QueryFenceExtension
   @Override
   public void afterTestExecution(ExtensionContext context) {
     List<Finding> findings = new ArrayList<>();
+    Set<Suppression> matched = new LinkedHashSet<>();
     int statements = 0;
     for (FencedDataSource dataSource : dataSources) {
       findings.addAll(dataSource.recorder().findings());
       statements += dataSource.recorder().statements().size();
+      matched.addAll(dataSource.recorder().matchedSuppressions());
       dataSource.recorder().clear();
     }
     String test = testId(context);
-    RunReport.instance().add(policyName, policy.mode(), test, findings, statements);
+    RunReport.instance().add(policyName, policy, test, findings, statements, matched);
 
-    if (!findings.isEmpty() && policy.mode() == Mode.FAIL) {
+    List<Finding> failing = Findings.failing(policy, findings);
+    if (!failing.isEmpty()) {
       throw new AssertionError(
-          Findings.failureMessage(findings, test, RunReport.instance().reportFile().toString()));
+          Findings.failureMessage(failing, test, RunReport.instance().reportFile().toString()));
     }
   }
 

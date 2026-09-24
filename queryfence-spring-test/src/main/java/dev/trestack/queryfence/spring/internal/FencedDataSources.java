@@ -16,10 +16,13 @@
 package dev.trestack.queryfence.spring.internal;
 
 import dev.trestack.queryfence.core.Policy;
+import dev.trestack.queryfence.core.Suppression;
 import dev.trestack.queryfence.jdbc.FencedDataSource;
 import dev.trestack.queryfence.jdbc.QueryRecorder.Finding;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /** The wrapped data sources of one Spring test context. */
@@ -59,6 +62,13 @@ public final class FencedDataSources {
     List<Finding> findings = new ArrayList<>();
     dataSources.forEach(dataSource -> findings.addAll(dataSource.recorder().findings()));
     return List.copyOf(findings);
+  }
+
+  /** Every suppression of the policy that has silenced a violation so far. */
+  public Set<Suppression> matchedSuppressions() {
+    Set<Suppression> matched = new LinkedHashSet<>();
+    dataSources.forEach(dataSource -> matched.addAll(dataSource.recorder().matchedSuppressions()));
+    return matched;
   }
 
   public int statementCount() {

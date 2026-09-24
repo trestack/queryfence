@@ -38,7 +38,7 @@ add and no test code to change.
 ```yaml
 version: 1
 mode: FAIL               # FAIL the test, or REPORT only
-onUnparseable: FAIL      # SQL we cannot parse is a violation unless you downgrade it
+onUnparseable: FAIL      # SQL we cannot parse is a violation; REPORT downgrades those only
 
 rules:
   - id: tenant-isolation

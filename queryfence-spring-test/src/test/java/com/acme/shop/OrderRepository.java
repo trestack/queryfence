@@ -43,6 +43,14 @@ public class OrderRepository {
     return jdbc.queryForList("SELECT id FROM purchase_order WHERE status = ?", status);
   }
 
+  /** Valid SQL that JSqlParser 5.4 cannot read: the column {@code number} is unqualified. */
+  public int renumber(long tenantId) {
+    lastLine = here() + 1;
+    return jdbc.update(
+        "UPDATE purchase_order SET number = 'INV' WHERE number IS NULL AND tenant_id = ?",
+        tenantId);
+  }
+
   private static int here() {
     return StackWalker.getInstance()
         .walk(frames -> frames.skip(1).findFirst().orElseThrow())

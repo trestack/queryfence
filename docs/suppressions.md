@@ -12,13 +12,16 @@ suppressions:
 
 ## The rules of the game
 
-- A suppression is keyed by `Class#method`, the same string the report prints as the origin.
+- A suppression is keyed by `Class#method`, the same string the report prints as the origin. An
+  origin without `#method` is a configuration error, not a prefix match.
+- `rule:` names a rule id, or `parser` for the `UNPARSEABLE` findings the parser raises.
 - **The reason is required.** A blank one is a configuration error and the policy refuses to load.
   If you cannot write the sentence, this is not an exception — it is a leak nobody has looked at.
 - Suppressions live in the policy, never in production code. There is no annotation for your
   repositories to depend on, so nothing about QueryFence leaks into your application.
-- A suppression that matched nothing during the run is listed in the report. That usually means the
-  code moved, and the exception is no longer where it says it is.
+- A suppression that matched nothing during the run is listed in the console summary and in
+  `report.json` under `unmatchedSuppressions`. That usually means the code moved, and the exception
+  is no longer where it says it is.
 
 ## When *not* to suppress
 

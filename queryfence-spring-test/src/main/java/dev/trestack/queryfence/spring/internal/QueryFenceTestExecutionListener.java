@@ -15,7 +15,6 @@
  */
 package dev.trestack.queryfence.spring.internal;
 
-import dev.trestack.queryfence.core.Mode;
 import dev.trestack.queryfence.jdbc.QueryRecorder.Finding;
 import dev.trestack.queryfence.report.internal.Findings;
 import dev.trestack.queryfence.report.internal.RunReport;
@@ -56,13 +55,15 @@ public final class QueryFenceTestExecutionListener extends AbstractTestExecution
     RunReport.instance()
         .add(
             dataSources.policyName(),
-            dataSources.policy().mode(),
+            dataSources.policy(),
             test,
             findings,
-            dataSources.statementCount());
+            dataSources.statementCount(),
+            dataSources.matchedSuppressions());
     dataSources.clear();
 
-    if (findings.isEmpty() || dataSources.policy().mode() != Mode.FAIL) {
+    List<Finding> failing = Findings.failing(dataSources.policy(), findings);
+    if (failing.isEmpty()) {
       return;
     }
     if (testContext.getTestException() != null) {
@@ -70,7 +71,7 @@ public final class QueryFenceTestExecutionListener extends AbstractTestExecution
       return;
     }
     throw new AssertionError(
-        Findings.failureMessage(findings, test, RunReport.instance().reportFile().toString()));
+        Findings.failureMessage(failing, test, RunReport.instance().reportFile().toString()));
   }
 
   private static java.util.Optional<FencedDataSources> dataSources(TestContext testContext) {

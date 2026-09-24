@@ -81,12 +81,16 @@ def main() -> None:
 
     for group in report.get("policies", []):
         summary = group.get("summary", {})
+        unparseable = group.get("onUnparseable")
+        modes = group.get("mode") if unparseable is None else f"{group.get('mode')}, unparseable {unparseable}"
         print(
-            f"{group.get('policy')} [{group.get('mode')}]: "
+            f"{group.get('policy')} [{modes}]: "
             f"{summary.get('findings', 0)} findings, "
             f"{summary.get('statements', 0)} statements, "
             f"{summary.get('tests', 0)} tests"
         )
+        for stale in group.get("unmatchedSuppressions", []):
+            print(f"  suppression matched nothing: {stale.get('rule')} at {stale.get('origin')}")
 
     if not found:
         print("\nNothing to report: every statement satisfied the policy.")

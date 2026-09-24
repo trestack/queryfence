@@ -127,6 +127,13 @@ final class Messages {
         + " to QueryFence, or set onUnparseable: REPORT to only report it.";
   }
 
+  static String unparseableMentioning(String table) {
+    return "QueryFence could not parse this statement, so it cannot prove it safe. It mentions "
+        + table
+        + ", which stays unverified here: a missing filter on that table would go unnoticed."
+        + " Report the SQL to QueryFence, or set onUnparseable: REPORT to only report it.";
+  }
+
   private static String prefix(UnboundedWriteRule.Kind kind, String table, String alias) {
     return (kind == UnboundedWriteRule.Kind.UPDATE ? "UPDATE of " : "DELETE from ")
         + display(table, alias);
