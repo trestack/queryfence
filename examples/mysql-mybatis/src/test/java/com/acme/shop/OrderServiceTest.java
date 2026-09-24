@@ -22,6 +22,8 @@ class OrderServiceTest {
 
   @Test
   void listsTheOpenOrdersOfOneTenant() {
+    // This assertion passes: the fixture happens to have one OPEN order, and it belongs to
+    // tenant 7. The query behind it ignores the tenant, and QueryFence fails the test for it.
     assertThat(service.openOrdersOf(7L)).hasSize(1);
   }
 }

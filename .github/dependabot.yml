@@ -7,6 +7,12 @@ updates:
     groups:
       maven-plugins:
         patterns: ["org.apache.maven.plugins:*"]
+    ignore:
+      # The published modules compile against the oldest JUnit we support (Spring Boot 3.3), so a
+      # major bump is a deliberate decision, not a dependency update.
+      # See docs/decisions/junit-platform.md.
+      - dependency-name: "org.junit:junit-bom"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule:

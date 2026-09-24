@@ -23,6 +23,8 @@ class InvoiceServiceTest {
 
   @Test
   void listsOpenInvoices() {
-    assertThat(service.openInvoices()).hasSize(2);
+    // This assertion passes: the fixture happens to have one OPEN invoice, for tenant 7.
+    // The query behind it reads every tenant's invoices, and QueryFence fails the test for it.
+    assertThat(service.openInvoices()).hasSize(1);
   }
 }
