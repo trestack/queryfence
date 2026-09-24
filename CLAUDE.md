@@ -42,6 +42,11 @@ Hibernate `@TenantId`/filters, MyBatis-Plus tenant interceptor). It complements 
 `examples/` holds two standalone Spring Boot projects (MySQL + MyBatis, Postgres + JPA) that run
 with `docker compose up`; they are not part of the reactor.
 
+`dogfood/` holds Northwind Shop, a realistic multi-tenant application (60+ queries across JPA,
+MyBatis and JdbcTemplate, 62 Testcontainers tests) that QueryFence is measured against in REPORT
+mode. It is not in the reactor and is never published, and its deliberately sloppy queries are the
+measurement — do not fix them. Results: `dogfood/DOGFOOD-REPORT.md`.
+
 ## Architecture rules (do not break)
 
 1. `queryfence-core` must never depend on JDBC, JUnit, Spring or YAML libraries. It also must not
@@ -177,7 +182,9 @@ parameter value checks, custom rule DSL, UI.
 
 Phase 0 to Phase 6 are done: design, 205 golden cases, rule engine, metamorphic tests, PIT, SQL
 capture with origin resolution, the JUnit and Spring modules, the Testcontainers matrix, the
-examples and the documentation site. Phase 7 (current): release 0.1.0 — see `docs/RELEASE.md`.
+examples, the documentation site and the Phase 5 dogfood measurement (`dogfood/`, 20 findings on 75
+statements, 4 false positives, and a list of what 0.1.0 must fix first — see
+`dogfood/DOGFOOD-REPORT.md`). Phase 7 (current): release 0.1.0 — see `docs/RELEASE.md`.
 Releasing is the maintainer's job; agents never deploy, tag or touch GPG and Central credentials.
 
 1. Phase 0 — design on paper (README, DESIGN.md, 30 cases)

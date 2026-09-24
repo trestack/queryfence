@@ -1,0 +1,19 @@
+# First QueryFence policy, written while adopting it in REPORT mode.
+# The table list comes from:
+#   SELECT table_name FROM information_schema.columns
+#   WHERE column_name = 'tenant_id' AND table_schema = 'public' ORDER BY table_name;
+version: 1
+mode: REPORT
+onUnparseable: REPORT
+
+rules:
+  - id: tenant-isolation
+    type: require-predicate
+    column: tenant_id
+    tables:
+      - audit_log
+      - customer
+      - invoice
+      - order_item
+      - payment
+      - purchase_order
