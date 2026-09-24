@@ -66,7 +66,7 @@ class DefaultSqlCheckerTest {
         .satisfies(
             v -> {
               assertThat(v.code()).isEqualTo(Violation.Code.UNPARSEABLE);
-              assertThat(v.ruleId()).isNull();
+              assertThat(v.ruleId()).isEqualTo(Violation.PARSER_RULE);
               assertThat(v.ruleType()).isNull();
               assertThat(v.sql()).isEqualTo(sql);
             });

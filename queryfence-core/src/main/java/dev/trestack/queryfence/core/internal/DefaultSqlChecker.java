@@ -96,9 +96,7 @@ public final class DefaultSqlChecker implements SqlChecker {
       if (IGNORED_WHEN_UNPARSEABLE.contains(leadingKeyword(sql))) {
         return List.of();
       }
-      return List.of(
-          new Violation(
-              null, null, Violation.Code.UNPARSEABLE, null, null, Messages.unparseable(), sql));
+      return unparseable(sql);
     }
     List<Statement> statements = parsed.statements();
     List<Violation> violations = new ArrayList<>();
@@ -117,6 +115,38 @@ public final class DefaultSqlChecker implements SqlChecker {
   }
 
   /** The first keyword of a statement, skipping leading comments and whitespace. */
+  /**
+   * One violation per protected table the statement mentions, so a parser failure cannot hide a
+   * table from the report; one table-less violation when it mentions none.
+   */
+  private List<Violation> unparseable(String sql) {
+    List<String> mentioned = ProtectedTables.mentionedIn(sql, policy);
+    if (mentioned.isEmpty()) {
+      return List.of(
+          new Violation(
+              Violation.PARSER_RULE,
+              null,
+              Violation.Code.UNPARSEABLE,
+              null,
+              null,
+              Messages.unparseable(),
+              sql));
+    }
+    List<Violation> violations = new ArrayList<>(mentioned.size());
+    for (String table : mentioned) {
+      violations.add(
+          new Violation(
+              Violation.PARSER_RULE,
+              null,
+              Violation.Code.UNPARSEABLE,
+              table,
+              null,
+              Messages.unparseableMentioning(table),
+              sql));
+    }
+    return List.copyOf(violations);
+  }
+
   private static String leadingKeyword(String sql) {
     int i = 0;
     while (i < sql.length()) {

@@ -408,7 +408,24 @@ DELETE FROM order_item WHERE order_id = ? OR TRUE
 ## Unparseable SQL
 
 A statement JSqlParser cannot parse produces an `UNPARSEABLE` violation, whatever tables it may
-touch. `onUnparseable: FAIL` (default) fails the test; `onUnparseable: REPORT` only reports it.
+touch.
+
+**Mode.** `onUnparseable` governs these violations and nothing else, independently of `mode`:
+`onUnparseable: FAIL` (the default) fails the test, `onUnparseable: REPORT` only records it. A run
+with `mode: FAIL` and `onUnparseable: REPORT` therefore fails on a leak while only reporting what
+the parser could not read — the setting a first adoption wants. The decision is per finding
+(`Policy.modeFor(code)`), never per run.
+
+**Rule id.** These violations come from the parser, not from a rule, and carry the rule id
+`parser`. They are suppressed by origin like any other violation, with `rule: parser`.
+
+**Tables.** We cannot say what an unparseable statement does, but we can say which protected tables
+it names, so a parser failure does not hide a table from the report: the raw SQL is scanned for the
+tables the policy protects and one violation is emitted per table mentioned, in the order the policy
+declares them. Matching is on whole identifiers, case-insensitively; a schema prefix
+(`app.purchase_order`) and quoting (`"purchase_order"`, `` `purchase_order` ``) still match,
+`purchase_order_archive` does not, and comments and string literals are ignored. A statement that
+mentions no protected table produces one violation with no table.
 
 ## Known bypasses and how they are blocked
 
@@ -450,8 +467,15 @@ parse is a violation, even if it carries a correct tenant filter. That is delibe
 pattern-based ignore list would be a bypass anybody could copy into their policy. Such a statement
 is suppressed by origin, with a reason, like any other exception.
 
-We know of no valid DML statement that JSqlParser 5.4 rejects today. Dialect syntax we checked and
-that parses: `DISTINCT ON`, `ILIKE`, JSONB `->>`, `FOR UPDATE SKIP LOCKED`, `RETURNING`, Oracle
+One valid statement shape is known to fail: **an unqualified column named `number`**.
+`SELECT number FROM invoice` does not parse, while `SELECT i.number FROM invoice i` and
+`SELECT "number" FROM invoice` do; the cause appears to be the `NUMBER` type keyword of
+`CAST(x AS NUMBER)`. `number` is an ordinary column name in billing schemas, so the workaround is to
+qualify or quote the column, or to suppress the origin with `rule: parser`. Reported in
+`docs/upstream-issues/jsqlparser-unqualified-column-named-number.md`.
+
+Apart from that, we know of no valid DML statement that JSqlParser 5.4 rejects. Dialect syntax we
+checked and that parses: `DISTINCT ON`, `ILIKE`, JSONB `->>`, `FOR UPDATE SKIP LOCKED`, `RETURNING`, Oracle
 hints, `WINDOW`, `TABLESAMPLE`, `ANY(ARRAY[...])`, `FROM ONLY`, MySQL `JSON_TABLE` in FROM and JOIN,
 `INSERT ... SET`, `REPLACE`, multi-table `UPDATE`/`DELETE`, `UPDATE ... FROM`, `DELETE ... USING`,
 `ON CONFLICT`, `ON DUPLICATE KEY UPDATE`, `LATERAL`. Statements that do not parse and are ignored by
@@ -527,6 +551,7 @@ golden corpus asserts them verbatim. `{ref}` is the alias, or the table name whe
 | `TAUTOLOGICAL_WHERE` | `UPDATE of {table} has a WHERE clause that is always true and changes every row. Replace it with a condition that selects only the intended rows.` (DELETE: `removes every row`) |
 | `UNSUPPORTED_STATEMENT` | `{STATEMENT} statements on {table} are not analysed yet. Rewrite the statement as INSERT or UPDATE, or suppress its origin with a reason.` |
 | `UNPARSEABLE` | `QueryFence could not parse this statement, so it cannot prove it safe. Report the SQL to QueryFence, or set onUnparseable: REPORT to only report it.` |
+| `UNPARSEABLE` mentioning a protected table | `QueryFence could not parse this statement, so it cannot prove it safe. It mentions {table}, which stays unverified here: a missing filter on that table would go unnoticed. Report the SQL to QueryFence, or set onUnparseable: REPORT to only report it.` |
 
 For `AMBIGUOUS_COLUMN`, `{tables}` lists the unfenced occurrences of the block as
 `table (alias)`, `{ref}` is the first of them, and `table`/`alias` are `null`.
@@ -629,7 +654,8 @@ DataSource wrapped = queryFence.wrap(dataSource);
 ```yaml
 version: 1                       # required; only 1 is valid
 mode: FAIL                       # FAIL | REPORT, default FAIL
-onUnparseable: FAIL              # FAIL | REPORT, default FAIL
+onUnparseable: FAIL              # FAIL | REPORT, default FAIL, governs UNPARSEABLE only
+basePackages: []                 # optional: resolve origins inside these packages only
 rules:
   - id: tenant-isolation         # required, unique
     type: require-predicate      # require-predicate | update-without-where | delete-without-where
@@ -638,12 +664,17 @@ rules:
     allowedFunctions: []         # require-predicate only, optional (RP-2)
     primaryKey: id               # require-predicate only, optional, default id (RP-14)
 suppressions:
-  - rule: tenant-isolation       # must name an existing rule id
+  - rule: tenant-isolation       # a rule id, or `parser` for UNPARSEABLE
     origin: com.acme.Foo#bar     # required, Class#method
     reason: why this is safe     # required, non-blank
 ```
 
-Unknown keys, duplicate rule ids and missing required fields are configuration errors.
+Unknown keys, duplicate rule ids and missing required fields are configuration errors, and every
+message names the file the mistake is in. The file is read once per JVM, so a suite of a hundred
+test classes parses it once and an invalid file is diagnosed once.
+
+`basePackages` lives here rather than in `Policy` because it is a capture concern: the engine knows
+nothing about stack traces. The loader hands it to `CaptureSettings`.
 
 ## Roadmap
 

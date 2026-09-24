@@ -7,7 +7,8 @@
 ```yaml
 version: 1                       # required; only 1 exists
 mode: FAIL                       # FAIL | REPORT, default FAIL
-onUnparseable: FAIL              # FAIL | REPORT, default FAIL
+onUnparseable: FAIL              # FAIL | REPORT, default FAIL; governs UNPARSEABLE only
+basePackages: []                 # optional: resolve origins inside these packages only
 
 rules:
   - id: tenant-isolation         # required, unique
@@ -18,13 +19,15 @@ rules:
     primaryKey: id               # optional, default id; drives PRIMARY_KEY_LOOKUP
 
 suppressions:
-  - rule: tenant-isolation
+  - rule: tenant-isolation       # a rule id, or `parser` for UNPARSEABLE findings
     origin: com.acme.Foo#bar     # required, Class#method
     reason: why this is safe     # required, non-blank
 ```
 
 Unknown keys, unknown rule types, a wrong version, a duplicate rule id or a suppression without a
-reason are configuration errors: QueryFence refuses to load the policy and says which key is wrong.
+reason are configuration errors: QueryFence refuses to load the policy, names the file and says
+which key is wrong. The file is read once per JVM, so the mistake is reported once, not once per
+test class.
 
 ## Modes
 
@@ -34,6 +37,10 @@ reason are configuration errors: QueryFence refuses to load the policy and says 
 | `mode: REPORT` | violations are collected and printed, nothing fails |
 | `onUnparseable: FAIL` | SQL that does not parse is a violation |
 | `onUnparseable: REPORT` | it is only reported |
+
+The two settings are independent: `onUnparseable` governs `UNPARSEABLE` findings, `mode` governs
+every other code. `mode: FAIL` with `onUnparseable: REPORT` fails the build on a leak while only
+recording the statements the parser could not read, which is what a first adoption wants.
 
 Start a new adoption in `REPORT`; see [Adopting in an existing project](ADOPTION.md).
 
@@ -53,7 +60,15 @@ QueryFenceExtension.of(policy);
 ## Origin resolution
 
 By default the origin is the first stack frame outside the JDK, drivers, ORMs, frameworks and
-QueryFence. To make it exact, name your packages:
+QueryFence. A lambda is reported as the method that contains it, not under its synthetic
+`lambda$...$0` name. To make the origin exact, name your packages — in the policy file, which is
+what `queryfence-spring-test` reads:
+
+```yaml
+basePackages: [com.acme]
+```
+
+or in Java, when you build the extension yourself:
 
 ```java
 QueryFenceExtension.of(policy, CaptureSettings.ofBasePackages("com.acme"));

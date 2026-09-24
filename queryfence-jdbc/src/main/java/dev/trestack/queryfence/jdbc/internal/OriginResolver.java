@@ -56,6 +56,8 @@ public final class OriginResolver {
           "net.ttddyy.",
           "dev.trestack.queryfence.");
 
+  private static final String LAMBDA_PREFIX = "lambda$";
+
   private static final StackWalker WALKER = StackWalker.getInstance();
 
   private final List<String> basePackages;
@@ -104,6 +106,39 @@ public final class OriginResolver {
 
   private static Origin toOrigin(StackFrame frame) {
     return new Origin(
-        frame.getClassName(), frame.getMethodName(), frame.getFileName(), frame.getLineNumber());
+        frame.getClassName(),
+        enclosingMethod(frame.getMethodName()),
+        frame.getFileName(),
+        frame.getLineNumber());
+  }
+
+  /**
+   * The method a user would name. A lambda compiles to a synthetic method called {@code
+   * lambda$theEnclosingMethod$0}, which is accurate and unreadable, so we report the enclosing
+   * method instead; the line number already points inside the lambda.
+   */
+  private static String enclosingMethod(String methodName) {
+    String name = methodName;
+    while (name != null && name.startsWith(LAMBDA_PREFIX)) {
+      String inner = name.substring(LAMBDA_PREFIX.length());
+      int lastDollar = inner.lastIndexOf('$');
+      if (lastDollar <= 0 || !isDigits(inner.substring(lastDollar + 1))) {
+        return name;
+      }
+      name = inner.substring(0, lastDollar);
+    }
+    return name;
+  }
+
+  private static boolean isDigits(String text) {
+    if (text.isEmpty()) {
+      return false;
+    }
+    for (int i = 0; i < text.length(); i++) {
+      if (!Character.isDigit(text.charAt(i))) {
+        return false;
+      }
+    }
+    return true;
   }
 }

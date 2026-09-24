@@ -129,7 +129,7 @@ test code to change.
 ```yaml
 version: 1
 mode: FAIL               # FAIL the test, or REPORT only
-onUnparseable: FAIL      # SQL we cannot parse is a violation unless you downgrade it
+onUnparseable: FAIL      # SQL we cannot parse is a violation; REPORT downgrades those only
 
 rules:
   - id: tenant-isolation
@@ -195,7 +195,9 @@ class OrderServiceTest {
 context (`@SpringBootTest`, `@DataJpaTest`, `@JdbcTest`, ...) it wraps each `DataSource` bean,
 loads `classpath:queryfence.yml`, and checks the SQL executed by each test method after it
 finishes. In `FAIL` mode a violation fails that test; in `REPORT` mode it is only written to the
-console and to `target/queryfence/report.json`.
+console and to `target/queryfence/report.json`. Each finding is judged by the setting that governs
+it: `mode` for a rule, `onUnparseable` for a statement the parser could not read, so `mode: FAIL`
+with `onUnparseable: REPORT` fails on leaks and only records what it cannot check.
 
 ### Plain JDBC
 

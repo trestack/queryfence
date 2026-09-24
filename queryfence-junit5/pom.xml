@@ -24,6 +24,12 @@
       <artifactId>junit-jupiter-api</artifactId>
       <scope>provided</scope>
     </dependency>
+    <!-- Only for the TestExecutionListener that prints the summary; every test runner has it. -->
+    <dependency>
+      <groupId>org.junit.platform</groupId>
+      <artifactId>junit-platform-launcher</artifactId>
+      <scope>provided</scope>
+    </dependency>
     <dependency>
       <groupId>org.yaml</groupId>
       <artifactId>snakeyaml</artifactId>

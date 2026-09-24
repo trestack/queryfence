@@ -7,6 +7,7 @@ happened, and why it matters for QueryFence.
 | File | Project | Status |
 |---|---|---|
 | `jsqlparser-json-table.md` | [JSqlParser](https://github.com/JSQLParser/JSqlParser) | investigated, no bug — do not file |
+| `jsqlparser-unqualified-column-named-number.md` | [JSqlParser](https://github.com/JSQLParser/JSqlParser) | ready to file |
 
 When an issue is filed, add its link to the table. When a fix is released, upgrade the dependency,
 add corpus cases for the statements that used to fail, and remove the entry.

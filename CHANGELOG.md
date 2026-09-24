@@ -27,6 +27,13 @@ class, method and line that produced the query.
 - Fail closed: SQL that does not parse, and statement types not analysed yet, are violations.
   Statements that can neither read nor write rows (`SET`, `SHOW`, `FLUSH`, DDL, `CALL`) are ignored
   when they do not parse, because test fixtures run them all the time.
+- `onUnparseable` governs `UNPARSEABLE` findings and nothing else, independently of `mode`:
+  `mode: FAIL` with `onUnparseable: REPORT` fails the build on a leak while only recording the
+  statements the parser could not read. The decision is per finding (`Policy.modeFor(code)`).
+- An `UNPARSEABLE` finding names the protected tables the statement mentions — one finding per
+  table, matched on whole identifiers, ignoring comments and string literals — so a parser failure
+  cannot hide a table from the report. These findings carry the rule id `parser` and are suppressed
+  with `rule: parser`.
 - Public API: `Policy` (with a builder), `Rule`, `Mode`, `Suppression`, `SqlChecker`, `Violation`.
   The engine depends on JSqlParser only — no JDBC, no JUnit, no Spring, and it does not model where
   a statement came from.
@@ -37,13 +44,19 @@ class, method and line that produced the query.
   statement of a JDBC batch and statements that failed while executing, and passes the SQL on
   unchanged.
 - The origin — class, method, file, line — is resolved with `StackWalker`, skipping the JDK,
-  drivers, ORMs, frameworks and QueryFence itself. `CaptureSettings.ofBasePackages("com.acme")`
-  makes it exact.
+  drivers, ORMs, frameworks and QueryFence itself. `CaptureSettings.ofBasePackages("com.acme")`, or
+  `basePackages:` in the policy file, makes it exact. A lambda is reported as the method that
+  contains it rather than under its synthetic `lambda$...$0` name.
 
 **Reports (`queryfence-report`)**
 
 - A console summary and `target/queryfence/report.json`, grouped per policy, each group with its own
   mode. Findings carry the rule, the code, the table, the message, the SQL and the origin.
+- The summary is printed when the test plan ends, through a JUnit Platform `TestExecutionListener`,
+  so it reaches the build log under Maven Surefire and Gradle instead of a stream that a JVM
+  shutdown hook writes to after the runner has stopped listening.
+- Suppressions that matched nothing during the run are listed in the summary and in the report under
+  `unmatchedSuppressions`: that is how an exception whose code has moved shows up.
 - `tools/queryfence-summary.py` summarises a report by rule, table, code and origin, with a
   `--triage` listing for adoption. No dependencies.
 
@@ -54,7 +67,11 @@ class, method and line that produced the query.
 - `FAIL` mode fails the test with the rule, the fix, the SQL and the origin line; `REPORT` mode only
   collects.
 - The policy loader rejects unknown keys, unknown rule types and modes, a wrong version and
-  suppressions without a reason, naming the resource and the offending key.
+  suppressions without a reason, naming the resource and the offending key — including the errors
+  raised by the policy model itself, such as an origin that is not `Class#method`. A policy file is
+  read once per JVM, so a mistake is diagnosed once instead of once per test class.
+- `basePackages:` in the policy file names the packages origins are resolved in, which
+  `queryfence-spring-test` reads as well; nothing else needs to change.
 - Built against JUnit 5.10.5, the floor we support; `junit-jupiter-api` is `provided`, so your build
   chooses the version. CI runs 5.10, 5.13 and 6.1.
 
@@ -97,8 +114,12 @@ These are documented in [docs/DESIGN.md](https://github.com/trestack/queryfence/
 - **Derived tables and CTEs.** A filter applied outside a derived table or a CTE does not fence the
   tables inside it: v0.1 does not push predicates down. Move the filter inside the subquery.
 - **Statements that do not parse.** What JSqlParser 5.4 cannot parse, QueryFence cannot clear, so a
-  DML statement that fails to parse is a violation even if it is correct. We know of no valid DML
-  statement that fails today; report one and it becomes an upstream issue.
+  DML statement that fails to parse is a violation even if it is correct. One shape is known:
+  **an unqualified column named `number`** (`SELECT number FROM invoice`) does not parse, while
+  `i.number` and `"number"` do. Qualify or quote the column, or suppress the origin with
+  `rule: parser`; reported upstream in
+  [docs/upstream-issues](https://github.com/trestack/queryfence/tree/main/docs/upstream-issues).
+  The finding names the protected tables the statement mentions, so the blind spot is visible.
 - **Only what your tests run.** Untested code paths are unchecked, parameter *values* are not
   checked, views and stored procedures are opaque, and JUnit parallel execution is unsupported.
 

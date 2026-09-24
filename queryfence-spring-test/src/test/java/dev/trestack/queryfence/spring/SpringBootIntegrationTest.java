@@ -102,6 +102,22 @@ class SpringBootIntegrationTest {
     run(DataSourceBeanCase.class).assertStatistics(stats -> stats.started(1).succeeded(1));
   }
 
+  @Test
+  void onlyReportsWhatItCannotParseAndResolvesOriginsInTheDeclaredBasePackages() {
+    run(UnparseableCase.class).assertStatistics(stats -> stats.started(1).succeeded(1));
+
+    assertThat(RunReport.instance().findings())
+        .singleElement()
+        .satisfies(
+            reported -> {
+              assertThat(reported.finding().violation().code().name()).isEqualTo("UNPARSEABLE");
+              assertThat(reported.finding().violation().table()).isEqualTo("purchase_order");
+              assertThat(reported.finding().origin().className())
+                  .isEqualTo(OrderRepository.class.getName());
+              assertThat(reported.finding().origin().methodName()).isEqualTo("renumber");
+            });
+  }
+
   private static Events run(Class<?> testClass) {
     return EngineTestKit.engine("junit-jupiter")
         .selectors(selectClass(testClass))
@@ -152,6 +168,19 @@ class SpringBootIntegrationTest {
     @Test
     void listsOrders() {
       repository.findByStatus(1L, "OPEN");
+    }
+  }
+
+  /** mode FAIL, onUnparseable REPORT: the statement is recorded and the test still passes. */
+  @SpringBootTest(classes = ShopApplication.class)
+  @QueryFencePolicy("queryfence-unparseable-report.yml")
+  static class UnparseableCase {
+
+    @Autowired OrderRepository repository;
+
+    @Test
+    void renumbers() {
+      repository.renumber(1L);
     }
   }
 

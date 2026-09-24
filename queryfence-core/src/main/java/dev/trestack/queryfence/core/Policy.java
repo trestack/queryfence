@@ -95,6 +95,21 @@ public final class Policy {
     return onUnparseable;
   }
 
+  /**
+   * The mode that governs one violation: {@link #onUnparseable()} for {@link
+   * Violation.Code#UNPARSEABLE}, {@link #mode()} for every other code. Callers decide whether to
+   * fail with this, never with {@link #mode()} alone, so that {@code onUnparseable: REPORT} really
+   * does only report.
+   *
+   * @param code the code of the violation
+   * @return the mode that governs violations with this code
+   * @throws NullPointerException when {@code code} is {@code null}
+   */
+  public Mode modeFor(Violation.Code code) {
+    Objects.requireNonNull(code, "code");
+    return code == Violation.Code.UNPARSEABLE ? onUnparseable : mode;
+  }
+
   /** Builds a {@link Policy}. Invalid input fails fast with {@link IllegalArgumentException}. */
   public static final class Builder {
 

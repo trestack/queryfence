@@ -18,7 +18,7 @@ package dev.trestack.queryfence.core;
 /**
  * One statement that breaks one rule.
  *
- * @param ruleId the id of the broken rule, or {@code null} for {@link Code#UNPARSEABLE}
+ * @param ruleId the id of the broken rule, or {@link #PARSER_RULE} for {@link Code#UNPARSEABLE}
  * @param ruleType the type of the broken rule, or {@code null} for {@link Code#UNPARSEABLE}
  * @param code what kind of problem was found
  * @param table the normalized table name (lower case, unquoted, without schema), or {@code null}
@@ -34,6 +34,12 @@ public record Violation(
     String alias,
     String message,
     String sql) {
+
+  /**
+   * The rule id of a violation the parser raised rather than a rule: {@link Code#UNPARSEABLE}.
+   * Suppress one with {@code rule: parser} in the policy, like any other rule.
+   */
+  public static final String PARSER_RULE = "parser";
 
   /** What kind of problem a violation is; see {@code docs/DESIGN.md} "Violation model". */
   public enum Code {

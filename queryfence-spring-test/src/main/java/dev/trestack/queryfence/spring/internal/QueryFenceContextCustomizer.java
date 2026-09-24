@@ -16,6 +16,7 @@
 package dev.trestack.queryfence.spring.internal;
 
 import dev.trestack.queryfence.core.Policy;
+import dev.trestack.queryfence.jdbc.CaptureSettings;
 import dev.trestack.queryfence.jdbc.FencedDataSource;
 import dev.trestack.queryfence.jdbc.QueryFence;
 import dev.trestack.queryfence.report.internal.Disabled;
@@ -31,10 +32,12 @@ final class QueryFenceContextCustomizer implements ContextCustomizer {
 
   private final String resource;
   private final Policy policy;
+  private final CaptureSettings captureSettings;
 
-  QueryFenceContextCustomizer(String resource, Policy policy) {
+  QueryFenceContextCustomizer(String resource, Policy policy, CaptureSettings captureSettings) {
     this.resource = resource;
     this.policy = policy;
+    this.captureSettings = captureSettings;
   }
 
   @Override
@@ -80,7 +83,7 @@ final class QueryFenceContextCustomizer implements ContextCustomizer {
       if (!(bean instanceof DataSource dataSource) || bean instanceof FencedDataSource) {
         return bean;
       }
-      FencedDataSource fenced = QueryFence.wrap(dataSource, policy);
+      FencedDataSource fenced = QueryFence.wrap(dataSource, policy, captureSettings);
       dataSources.add(fenced);
       return fenced;
     }

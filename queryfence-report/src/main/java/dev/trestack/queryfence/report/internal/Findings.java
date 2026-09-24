@@ -15,6 +15,8 @@
  */
 package dev.trestack.queryfence.report.internal;
 
+import dev.trestack.queryfence.core.Mode;
+import dev.trestack.queryfence.core.Policy;
 import dev.trestack.queryfence.core.Violation;
 import dev.trestack.queryfence.jdbc.CapturedStatement;
 import dev.trestack.queryfence.jdbc.QueryRecorder.Finding;
@@ -24,6 +26,18 @@ import java.util.List;
 public final class Findings {
 
   private Findings() {}
+
+  /**
+   * The findings that must fail the test, which is decided per finding: an {@code UNPARSEABLE}
+   * finding is governed by {@code onUnparseable}, every other one by {@code mode}. A run may
+   * therefore fail on a leak while only reporting a statement the parser could not read, which is
+   * what {@code onUnparseable: REPORT} promises.
+   */
+  public static List<Finding> failing(Policy policy, List<Finding> findings) {
+    return findings.stream()
+        .filter(finding -> policy.modeFor(finding.violation().code()) == Mode.FAIL)
+        .toList();
+  }
 
   /** One finding, as the console report and the failure message show it. */
   public static String format(Finding finding, String test) {

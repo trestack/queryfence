@@ -201,7 +201,65 @@ class PolicyYamlTest {
         .hasMessageContaining("has mode: WARN; expected FAIL or REPORT");
   }
 
+  @Test
+  void readsTheBasePackagesThatMakeOriginsExact() {
+    assertThat(
+            parse(
+                    """
+                    version: 1
+                    basePackages: [com.acme, com.northwind.shop]
+                    rules:
+                      - id: tenant-isolation
+                        type: require-predicate
+                        column: tenant_id
+                        tables: [purchase_order]
+                    """)
+                .basePackages())
+        .containsExactly("com.acme", "com.northwind.shop");
+  }
+
+  @Test
+  void hasNoBasePackagesUnlessTheFileNamesThem() {
+    assertThat(
+            parse(
+                    """
+                    version: 1
+                    rules:
+                      - id: tenant-isolation
+                        type: require-predicate
+                        column: tenant_id
+                        tables: [purchase_order]
+                    """)
+                .basePackages())
+        .isEmpty();
+  }
+
+  @Test
+  void namesThePolicyFileWhenThePolicyModelRejectsSomething() {
+    assertThatThrownBy(
+            () ->
+                read(
+                    """
+                    version: 1
+                    rules:
+                      - id: tenant-isolation
+                        type: require-predicate
+                        column: tenant_id
+                        tables: [purchase_order]
+                    suppressions:
+                      - rule: tenant-isolation
+                        origin: com.acme.orders.OrderRepository
+                        reason: An admin screen.
+                    """))
+        .hasMessageContaining("QueryFence policy queryfence.yml is invalid")
+        .hasMessageContaining("Suppression origin must be Class#method");
+  }
+
   private static Policy read(String yaml) {
+    return parse(yaml).policy();
+  }
+
+  private static PolicyYaml.Parsed parse(String yaml) {
     return new PolicyYaml("queryfence.yml")
         .read(new ByteArrayInputStream(yaml.getBytes(StandardCharsets.UTF_8)));
   }

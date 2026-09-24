@@ -22,6 +22,8 @@ import dev.trestack.queryfence.core.Violation;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
@@ -33,6 +35,7 @@ public final class QueryRecorder {
   private final Policy policy;
   private final SqlChecker checker;
   private final List<CapturedStatement> statements = new CopyOnWriteArrayList<>();
+  private final Set<Suppression> matchedSuppressions = ConcurrentHashMap.newKeySet();
 
   QueryRecorder(Policy policy) {
     this.policy = Objects.requireNonNull(policy, "policy");
@@ -51,6 +54,17 @@ public final class QueryRecorder {
   /** Forgets every recorded statement; the next test starts from an empty list. */
   public void clear() {
     statements.clear();
+  }
+
+  /**
+   * The suppressions of the policy that have silenced at least one violation so far. Kept for the
+   * whole run — {@link #clear()} does not forget them — so the report can name the suppressions
+   * that matched nothing, which usually means the code they point at has moved.
+   *
+   * @return the matched suppressions, never {@code null}
+   */
+  public Set<Suppression> matchedSuppressions() {
+    return Set.copyOf(matchedSuppressions);
   }
 
   /**
@@ -87,6 +101,7 @@ public final class QueryRecorder {
     for (Suppression suppression : policy.suppressions()) {
       if (suppression.ruleId().equals(violation.ruleId())
           && suppression.origin().equals(origin.classAndMethod())) {
+        matchedSuppressions.add(suppression);
         return true;
       }
     }

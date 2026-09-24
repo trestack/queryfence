@@ -19,6 +19,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.platform.engine.discovery.DiscoverySelectors.selectClass;
 
 import com.acme.orders.OrderRepository;
+import dev.trestack.queryfence.core.Mode;
+import dev.trestack.queryfence.core.Policy;
+import dev.trestack.queryfence.jdbc.CaptureSettings;
+import dev.trestack.queryfence.junit5.internal.ReportFlushListener;
 import dev.trestack.queryfence.report.internal.Disabled;
 import dev.trestack.queryfence.report.internal.RunReport;
 import java.nio.file.Files;
@@ -148,6 +152,127 @@ class ExtensionBehaviourTest {
         .contains("1 statements checked");
   }
 
+  @Test
+  void failsOnAnUnparseableStatementWhenOnUnparseableIsFail() {
+    run(FailAndUnparseableFailCase.class).assertStatistics(stats -> stats.started(1).failed(1));
+    assertThat(failureMessage(run(FailAndUnparseableFailCase.class))).contains("UNPARSEABLE");
+  }
+
+  @Test
+  void failsOnAnUnparseableStatementEvenWhenTheModeOnlyReports() {
+    run(ReportAndUnparseableFailCase.class).assertStatistics(stats -> stats.started(1).failed(1));
+  }
+
+  @Test
+  void onlyReportsAnUnparseableStatementWhenOnUnparseableIsReport() {
+    run(FailAndUnparseableReportCase.class)
+        .assertStatistics(stats -> stats.started(1).succeeded(1));
+
+    assertThat(RunReport.instance().findings())
+        .singleElement()
+        .satisfies(
+            reported ->
+                assertThat(reported.finding().violation().code().name()).isEqualTo("UNPARSEABLE"));
+  }
+
+  @Test
+  void reportsAnUnparseableStatementInReportModeWithoutFailing() {
+    run(ReportAndUnparseableReportCase.class)
+        .assertStatistics(stats -> stats.started(1).succeeded(1));
+
+    assertThat(RunReport.instance().findings()).hasSize(1);
+  }
+
+  @Test
+  void failsOnTheLeakWhileOnlyReportingTheStatementItCouldNotParse() {
+    Events tests = run(LeakAndUnparseableCase.class);
+
+    tests.assertStatistics(stats -> stats.started(1).failed(1));
+    assertThat(failureMessage(tests))
+        .contains("QueryFence: 1 violation")
+        .contains("MISSING_PREDICATE")
+        .doesNotContain("UNPARSEABLE");
+    assertThat(RunReport.instance().findings())
+        .extracting(reported -> reported.finding().violation().code().name())
+        .containsExactlyInAnyOrder("MISSING_PREDICATE", "UNPARSEABLE");
+  }
+
+  @Test
+  void namesTheProtectedTableAnUnparseableStatementMentions() {
+    run(FailAndUnparseableReportCase.class);
+
+    assertThat(RunReport.instance().findings())
+        .singleElement()
+        .satisfies(
+            reported -> {
+              assertThat(reported.finding().violation().table()).isEqualTo("purchase_order");
+              assertThat(reported.finding().violation().ruleId()).isEqualTo("parser");
+              assertThat(reported.finding().violation().message())
+                  .contains("It mentions purchase_order, which stays unverified here");
+            });
+  }
+
+  @Test
+  void listsTheSuppressionsThatMatchedNothing() {
+    run(StaleSuppressionCase.class).assertStatistics(stats -> stats.started(1).succeeded(1));
+    RunReport.instance().flush();
+
+    assertThat(RunReport.instance().summary())
+        .contains("1 suppression matched nothing")
+        .contains("tenant-isolation at com.acme.orders.OrderRepository#listEverything");
+    assertThat(RunReport.instance().json())
+        .contains("\"unmatchedSuppressions\":[{\"rule\":\"tenant-isolation\"")
+        .contains("\"origin\":\"com.acme.orders.OrderRepository#listEverything\"");
+  }
+
+  @Test
+  void doesNotListASuppressionThatSilencedSomething() {
+    run(SuppressedCase.class);
+
+    assertThat(RunReport.instance().summary()).doesNotContain("matched nothing");
+    assertThat(RunReport.instance().json()).contains("\"unmatchedSuppressions\":[]");
+  }
+
+  @Test
+  void printsTheSummaryWhenTheTestPlanEnds() throws Exception {
+    run(LeakingCase.class);
+    java.io.PrintStream out = System.out;
+    java.io.ByteArrayOutputStream captured = new java.io.ByteArrayOutputStream();
+    System.setOut(new java.io.PrintStream(captured, true, java.nio.charset.StandardCharsets.UTF_8));
+    try {
+      new ReportFlushListener().testPlanExecutionFinished(null);
+    } finally {
+      System.setOut(out);
+    }
+
+    assertThat(captured.toString(java.nio.charset.StandardCharsets.UTF_8))
+        .contains("QueryFence [queryfence.yml, mode FAIL]: 1 violation in 1 test");
+    assertThat(Files.exists(reportDirectory.resolve("report.json"))).isTrue();
+  }
+
+  @Test
+  void printsTheSummaryOnlyOncePerResult() {
+    run(LeakingCase.class);
+    RunReport.instance().flush();
+    java.io.PrintStream out = System.out;
+    java.io.ByteArrayOutputStream captured = new java.io.ByteArrayOutputStream();
+    System.setOut(new java.io.PrintStream(captured, true, java.nio.charset.StandardCharsets.UTF_8));
+    try {
+      new ReportFlushListener().testPlanExecutionFinished(null);
+    } finally {
+      System.setOut(out);
+    }
+
+    assertThat(captured.toString(java.nio.charset.StandardCharsets.UTF_8)).isEmpty();
+  }
+
+  @Test
+  void readsTheBasePackagesOfThePolicyFile() {
+    assertThat(PolicyFile.captureSettings("queryfence-base-packages.yml").basePackages())
+        .containsExactly("com.acme");
+    assertThat(PolicyFile.captureSettings("queryfence.yml")).isSameAs(CaptureSettings.defaults());
+  }
+
   private static Events run(Class<?> testClass) {
     return EngineTestKit.engine("junit-jupiter")
         .selectors(selectClass(testClass))
@@ -230,6 +355,90 @@ class ExtensionBehaviourTest {
     void listsOrders() {
       repository(fence).findByStatus(1L, "OPEN");
     }
+  }
+
+  /** Executes a statement QueryFence cannot parse; both modes fail. */
+  static class FailAndUnparseableFailCase {
+
+    @RegisterExtension
+    static final QueryFenceExtension fence = QueryFenceExtension.of(policy(Mode.FAIL, Mode.FAIL));
+
+    @Test
+    void renumbers() {
+      repository(fence).renumber(1L);
+    }
+  }
+
+  /** The mode only reports, but unparseable statements still fail. */
+  static class ReportAndUnparseableFailCase {
+
+    @RegisterExtension
+    static final QueryFenceExtension fence = QueryFenceExtension.of(policy(Mode.REPORT, Mode.FAIL));
+
+    @Test
+    void renumbers() {
+      repository(fence).renumber(1L);
+    }
+  }
+
+  /** Violations fail, but what the parser cannot read is only reported. */
+  static class FailAndUnparseableReportCase {
+
+    @RegisterExtension
+    static final QueryFenceExtension fence = QueryFenceExtension.of(policy(Mode.FAIL, Mode.REPORT));
+
+    @Test
+    void renumbers() {
+      repository(fence).renumber(1L);
+    }
+  }
+
+  /** Nothing fails. */
+  static class ReportAndUnparseableReportCase {
+
+    @RegisterExtension
+    static final QueryFenceExtension fence =
+        QueryFenceExtension.of(policy(Mode.REPORT, Mode.REPORT));
+
+    @Test
+    void renumbers() {
+      repository(fence).renumber(1L);
+    }
+  }
+
+  /** A leak and an unparseable statement in one test, with onUnparseable: REPORT. */
+  static class LeakAndUnparseableCase {
+
+    @RegisterExtension
+    static final QueryFenceExtension fence = QueryFenceExtension.of(policy(Mode.FAIL, Mode.REPORT));
+
+    @Test
+    void listsOrdersAndRenumbers() {
+      OrderRepository repository = repository(fence);
+      repository.renumber(1L);
+      repository.findByStatus(1L, "OPEN");
+    }
+  }
+
+  /** The policy suppresses a method that the test never calls. */
+  static class StaleSuppressionCase {
+
+    @RegisterExtension
+    static final QueryFenceExtension fence =
+        QueryFenceExtension.fromClasspath("queryfence-stale-suppression.yml");
+
+    @Test
+    void listsOrders() {
+      repository(fence).findByTenantAndStatus(1L, "OPEN");
+    }
+  }
+
+  private static Policy policy(Mode mode, Mode onUnparseable) {
+    return Policy.builder()
+        .mode(mode)
+        .onUnparseable(onUnparseable)
+        .requirePredicate("tenant-isolation", "tenant_id", "purchase_order")
+        .build();
   }
 
   private static OrderRepository repository(QueryFenceExtension fence) {
