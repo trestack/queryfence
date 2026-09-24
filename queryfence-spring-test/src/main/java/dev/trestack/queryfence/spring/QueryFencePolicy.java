@@ -40,6 +40,10 @@ import java.lang.annotation.Target;
 @Inherited
 public @interface QueryFencePolicy {
 
-  /** The policy resource on the test classpath. */
+  /**
+   * The policy resource on the test classpath.
+   *
+   * @return the resource name, for example {@code queryfence-legacy.yml}
+   */
   String value();
 }

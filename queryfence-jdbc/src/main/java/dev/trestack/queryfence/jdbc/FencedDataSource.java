@@ -23,9 +23,17 @@ import javax.sql.DataSource;
  */
 public interface FencedDataSource extends DataSource {
 
-  /** The recorder holding the statements executed through this data source. */
+  /**
+   * The recorder holding the statements executed through this data source.
+   *
+   * @return the recorder, shared by every connection this data source hands out
+   */
   QueryRecorder recorder();
 
-  /** The data source this one wraps. */
+  /**
+   * The data source this one wraps.
+   *
+   * @return the original, unwrapped data source
+   */
   DataSource delegate();
 }

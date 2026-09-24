@@ -21,12 +21,17 @@ package dev.trestack.queryfence.core;
  */
 public interface Rule {
 
-  /** The rule id declared in the policy, for example {@code tenant-isolation}. */
+  /**
+   * The rule id declared in the policy.
+   *
+   * @return the id, for example {@code tenant-isolation}
+   */
   String id();
 
   /**
-   * The rule type: {@code require-predicate}, {@code update-without-where} or {@code
-   * delete-without-where}.
+   * The kind of rule this is.
+   *
+   * @return {@code require-predicate}, {@code update-without-where} or {@code delete-without-where}
    */
   String type();
 }

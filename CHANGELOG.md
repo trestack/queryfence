@@ -5,34 +5,108 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-09-24
+
+First release. QueryFence checks the SQL your integration tests actually send to the database
+against a policy you declare once, and fails the build on the statements that break it, naming the
+class, method and line that produced the query.
+
 ### Added
 
-- `queryfence-core`: rule engine for `require-predicate`, `update-without-where` and
-  `delete-without-where` as specified in `docs/DESIGN.md`, behind a small public API
-  (`Policy`, `SqlChecker`, `Violation`). Every violation message explains how to fix it.
-- Ignore unparseable statements that cannot read or write rows (`SET`, `SHOW`, `FLUSH`, DDL, ...)
-  instead of reporting them, so test fixtures do not produce false positives.
-- `queryfence-jdbc`: `QueryFence.wrap(DataSource, Policy)` records every statement executed through
-  a data source (including JDBC batches), resolves the class, method, file and line that produced
-  it, and reports the violations of the policy with that origin. Suppressions are matched by
-  `Class#method`.
-- `queryfence-junit5`: `QueryFenceExtension` loads `queryfence.yml`, fences a `DataSource`, fails
-  the test in `FAIL` mode with the rule, the fix and the origin line, prints a summary at the end
-  of the run and writes `target/queryfence/report.json`.
-- `queryfence-spring-test`: every `DataSource` bean of a Spring test context is wrapped
-  automatically; adding the dependency and a `queryfence.yml` is the whole setup.
-- `queryfence-report` holds the run report; `queryfence-junit5` and `queryfence-spring-test` share
-  it. The console summary and `report.json` are grouped per policy, each with its own mode.
-- `@QueryFencePolicy("other.yml")` selects another policy file for a Spring test class, and
-  `queryfence.enabled=false` switches the checks off for a run, with a loud warning.
-- `queryfence-integration-tests`: Testcontainers matrix of {Hibernate, MyBatis, JdbcTemplate} ×
-  {MySQL, Postgres} on framework-generated SQL (derived queries, JPQL, pagination, fetch joins,
-  `EntityManager.find`, MyBatis dynamic SQL), each with a leak that must be caught and a correct
-  query that must not be reported.
-- `examples/`: two Spring Boot projects that run with `docker compose up` and ship a failing build.
-- New violation code `PRIMARY_KEY_LOOKUP`: a statement whose only filter is the primary key
-  (`findById`, `EntityManager.find`) is reported with its own fix — filter by tenant as well, or
-  map the tenant on the entity. The column is configurable per rule with `primaryKey`.
-- Documentation site (MkDocs Material) published to `trestack.github.io/queryfence`, with
-  `llms.txt` for AI agents, plus `docs/ADOPTION.md` and `tools/queryfence-summary.py` for adopting
-  QueryFence on an existing project.
+**Rule engine (`queryfence-core`)**
+
+- `require-predicate`: every occurrence of a protected table must be filtered by the tenant column —
+  in `FROM`, joins, subqueries, CTEs, each `UNION` branch, `UPDATE`/`DELETE` targets and
+  `INSERT ... SELECT` sources. Value predicates, `IN` lists, casts and functions named in
+  `allowedFunctions` count; transitive tenant-column equalities count when the chain has a value
+  anchor; an `OR` counts only when every branch fences the table.
+- `update-without-where` and `delete-without-where`: no WHERE clause, or one that is always true.
+- Violation codes `MISSING_PREDICATE`, `PRIMARY_KEY_LOOKUP`, `AMBIGUOUS_COLUMN`,
+  `MISSING_INSERT_COLUMN`, `NO_WHERE`, `TAUTOLOGICAL_WHERE`, `UNSUPPORTED_STATEMENT` and
+  `UNPARSEABLE`. Every message states the problem **and** the fix.
+- Fail closed: SQL that does not parse, and statement types not analysed yet, are violations.
+  Statements that can neither read nor write rows (`SET`, `SHOW`, `FLUSH`, DDL, `CALL`) are ignored
+  when they do not parse, because test fixtures run them all the time.
+- Public API: `Policy` (with a builder), `Rule`, `Mode`, `Suppression`, `SqlChecker`, `Violation`.
+  The engine depends on JSqlParser only — no JDBC, no JUnit, no Spring, and it does not model where
+  a statement came from.
+
+**Capture (`queryfence-jdbc`)**
+
+- `QueryFence.wrap(DataSource, Policy)` records every statement the driver executes, including each
+  statement of a JDBC batch and statements that failed while executing, and passes the SQL on
+  unchanged.
+- The origin — class, method, file, line — is resolved with `StackWalker`, skipping the JDK,
+  drivers, ORMs, frameworks and QueryFence itself. `CaptureSettings.ofBasePackages("com.acme")`
+  makes it exact.
+
+**Reports (`queryfence-report`)**
+
+- A console summary and `target/queryfence/report.json`, grouped per policy, each group with its own
+  mode. Findings carry the rule, the code, the table, the message, the SQL and the origin.
+- `tools/queryfence-summary.py` summarises a report by rule, table, code and origin, with a
+  `--triage` listing for adoption. No dependencies.
+
+**JUnit 5 (`queryfence-junit5`)**
+
+- `QueryFenceExtension.fromClasspath()` loads `queryfence.yml`; `wrap(DataSource)` fences a data
+  source. Only statements of the test method and the code it calls are checked, on any thread.
+- `FAIL` mode fails the test with the rule, the fix, the SQL and the origin line; `REPORT` mode only
+  collects.
+- The policy loader rejects unknown keys, unknown rule types and modes, a wrong version and
+  suppressions without a reason, naming the resource and the offending key.
+- Built against JUnit 5.10.5, the floor we support; `junit-jupiter-api` is `provided`, so your build
+  chooses the version. CI runs 5.10, 5.13 and 6.1.
+
+**Spring (`queryfence-spring-test`)**
+
+- Every `DataSource` bean of a Spring test context is wrapped automatically: the dependency plus a
+  `queryfence.yml` is the whole setup, with no test code to change.
+- `@QueryFencePolicy("other.yml")` selects another policy for a test class, and takes part in the
+  Spring context cache key.
+
+**Safety rails**
+
+- Suppressions live in the policy, keyed by `Class#method`, and a blank reason is a configuration
+  error. Production code never depends on QueryFence.
+- `queryfence.enabled=false` switches the checks off, prints a loud warning, records
+  `"disabled": true` with the reason in the report, and fails the build when the `CI` environment
+  variable is set unless `queryfence.allowDisabledInCi=true` says so deliberately.
+
+**Testing**
+
+- 205 golden corpus cases (SQL, policy, expected violations with their exact messages), a
+  metamorphic suite that weakens every passing case five ways and requires a violation, and PIT
+  mutation testing at 88% threshold.
+- Testcontainers matrix {Hibernate, MyBatis, JdbcTemplate} × {MySQL 8.4, Postgres 17} on
+  framework-generated SQL.
+
+### Known limitations
+
+These are documented in [docs/DESIGN.md](https://github.com/trestack/queryfence/blob/main/docs/DESIGN.md) and measured against real frameworks in
+`queryfence-integration-tests`.
+
+- **ORM associations.** A fetch join or a lazy association loads child rows by foreign key only
+  (`... from order_item where order_id = ?`). The rows belong to a parent your code fenced, but the
+  statement does not say so, so QueryFence reports them. Map the tenant on the child entity with
+  Hibernate `@TenantId` — then the SQL carries it and QueryFence goes quiet — or protect only the
+  aggregate root and accept that the child table is no longer checked.
+- **Primary-key lookups.** `findById` and `EntityManager.find` are reported as
+  `PRIMARY_KEY_LOOKUP`. That is deliberate: an id is guessable, so it is not tenant isolation. Use
+  `findByIdAndTenantId`, or map the tenant on the entity.
+- **Derived tables and CTEs.** A filter applied outside a derived table or a CTE does not fence the
+  tables inside it: v0.1 does not push predicates down. Move the filter inside the subquery.
+- **Statements that do not parse.** What JSqlParser 5.4 cannot parse, QueryFence cannot clear, so a
+  DML statement that fails to parse is a violation even if it is correct. We know of no valid DML
+  statement that fails today; report one and it becomes an upstream issue.
+- **Only what your tests run.** Untested code paths are unchecked, parameter *values* are not
+  checked, views and stored procedures are opaque, and JUnit parallel execution is unsupported.
+
+### API stability
+
+0.1.0 is the first release: the API is small on purpose, but it is **not frozen**. Anything in a
+`*.internal` package carries no promise at all and may change in any release. Breaking changes to
+the public API will be listed here, and the API freezes at 1.0.
+
+[Unreleased]: https://github.com/trestack/queryfence/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/trestack/queryfence/releases/tag/v0.1.0

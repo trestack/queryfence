@@ -18,7 +18,7 @@ package dev.trestack.queryfence.spring.internal;
 import dev.trestack.queryfence.core.Policy;
 import dev.trestack.queryfence.jdbc.FencedDataSource;
 import dev.trestack.queryfence.jdbc.QueryFence;
-import dev.trestack.queryfence.report.Disabled;
+import dev.trestack.queryfence.report.internal.Disabled;
 import java.util.Objects;
 import javax.sql.DataSource;
 import org.springframework.beans.factory.config.BeanPostProcessor;

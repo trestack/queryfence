@@ -35,15 +35,37 @@ public record Violation(
     String message,
     String sql) {
 
-  /** Violation codes, see {@code docs/DESIGN.md} "Violation model". */
+  /** What kind of problem a violation is; see {@code docs/DESIGN.md} "Violation model". */
   public enum Code {
+
+    /** A protected table is read or written without a tenant filter. */
     MISSING_PREDICATE,
+
+    /**
+     * The only filter is the primary key, as {@code findById} and {@code EntityManager.find}
+     * produce. Ids are guessable, so this is not tenant isolation.
+     */
     PRIMARY_KEY_LOOKUP,
+
+    /**
+     * The tenant column is used unqualified in a query block that reads several tables, so it
+     * cannot be bound to any of them.
+     */
     AMBIGUOUS_COLUMN,
+
+    /** An {@code INSERT} into a protected table does not set the tenant column. */
     MISSING_INSERT_COLUMN,
+
+    /** An {@code UPDATE} or {@code DELETE} has no WHERE clause and touches every row. */
     NO_WHERE,
+
+    /** An {@code UPDATE} or {@code DELETE} has a WHERE clause that is always true. */
     TAUTOLOGICAL_WHERE,
+
+    /** A statement type QueryFence does not analyse yet, such as {@code MERGE}. */
     UNSUPPORTED_STATEMENT,
+
+    /** SQL the parser does not understand, and that could read or write rows. */
     UNPARSEABLE
   }
 }

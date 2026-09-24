@@ -11,7 +11,7 @@ add and no test code to change.
     <dependency>
       <groupId>io.github.trestack</groupId>
       <artifactId>queryfence-spring-test</artifactId>
-      <version>0.1.0-SNAPSHOT</version>
+      <version>0.1.0</version>
       <scope>test</scope>
     </dependency>
     ```
@@ -22,13 +22,14 @@ add and no test code to change.
     <dependency>
       <groupId>io.github.trestack</groupId>
       <artifactId>queryfence-junit5</artifactId>
-      <version>0.1.0-SNAPSHOT</version>
+      <version>0.1.0</version>
       <scope>test</scope>
     </dependency>
     ```
 
-!!! note "Not on Maven Central yet"
-    Until 0.1.0 is released, build it locally with `./mvnw install` from a clone.
+!!! note "Not there yet?"
+    If 0.1.0 is not on Maven Central when you read this, clone the repository and run
+    `./mvnw install`, which puts `0.1.0-SNAPSHOT` in your local repository.
 
 ## 2. Declare the policy
 

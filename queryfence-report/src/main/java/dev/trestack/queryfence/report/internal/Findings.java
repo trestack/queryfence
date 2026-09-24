@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package dev.trestack.queryfence.report;
+package dev.trestack.queryfence.report.internal;
 
 import dev.trestack.queryfence.core.Violation;
 import dev.trestack.queryfence.jdbc.CapturedStatement;

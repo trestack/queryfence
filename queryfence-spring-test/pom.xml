@@ -10,6 +10,7 @@
   <artifactId>queryfence-spring-test</artifactId>
   <name>QueryFence :: spring-test</name>
   <description>Wraps every DataSource bean of a Spring test context, with no code to write.</description>
+  <url>https://github.com/trestack/queryfence</url>
 
   <dependencies>
     <dependency>

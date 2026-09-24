@@ -17,6 +17,10 @@ package dev.trestack.queryfence.core;
 
 /** What to do with violations: fail the test, or only report them. */
 public enum Mode {
+
+  /** A violation fails the test that executed the statement. */
   FAIL,
+
+  /** Violations are collected and printed, and nothing fails. */
   REPORT
 }

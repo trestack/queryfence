@@ -26,6 +26,12 @@ import java.util.Objects;
  */
 public record Suppression(String ruleId, String origin, String reason) {
 
+  /**
+   * Validates the suppression.
+   *
+   * @throws IllegalArgumentException if the origin is not {@code Class#method}, or a field is blank
+   * @throws NullPointerException if the rule id or the origin is {@code null}
+   */
   public Suppression {
     requireNonBlank(ruleId, "rule");
     requireNonBlank(origin, "origin");

@@ -30,7 +30,12 @@ public final class PolicyFile {
 
   private PolicyFile() {}
 
-  /** Reads {@value #DEFAULT_RESOURCE} from the classpath. */
+  /**
+   * Reads {@value #DEFAULT_RESOURCE} from the classpath.
+   *
+   * @return the policy it declares
+   * @throws IllegalStateException when the resource is missing or the policy is invalid
+   */
   public static Policy fromClasspath() {
     return fromClasspath(DEFAULT_RESOURCE);
   }
@@ -38,6 +43,8 @@ public final class PolicyFile {
   /**
    * Reads a policy from the classpath.
    *
+   * @param resource the resource path, with or without a leading slash
+   * @return the policy it declares
    * @throws IllegalStateException when the resource is missing or the policy is invalid
    */
   public static Policy fromClasspath(String resource) {

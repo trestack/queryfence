@@ -19,8 +19,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.platform.engine.discovery.DiscoverySelectors.selectClass;
 
 import com.acme.orders.OrderRepository;
-import dev.trestack.queryfence.report.Disabled;
-import dev.trestack.queryfence.report.RunReport;
+import dev.trestack.queryfence.report.internal.Disabled;
+import dev.trestack.queryfence.report.internal.RunReport;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;

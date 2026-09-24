@@ -17,8 +17,8 @@ package dev.trestack.queryfence.spring.internal;
 
 import dev.trestack.queryfence.core.Mode;
 import dev.trestack.queryfence.jdbc.QueryRecorder.Finding;
-import dev.trestack.queryfence.report.Findings;
-import dev.trestack.queryfence.report.RunReport;
+import dev.trestack.queryfence.report.internal.Findings;
+import dev.trestack.queryfence.report.internal.RunReport;
 import java.util.List;
 import org.springframework.beans.factory.NoSuchBeanDefinitionException;
 import org.springframework.test.context.TestContext;

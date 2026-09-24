@@ -36,9 +36,8 @@ Hibernate `@TenantId`/filters, MyBatis-Plus tenant interceptor). It complements 
 | `queryfence-report` | Collects findings per policy, console summary, `report.json` | jdbc |
 | `queryfence-junit5` | JUnit 5 extension, YAML policy loading | report, junit-jupiter-api (`provided`), snakeyaml |
 | `queryfence-spring-test` | Auto-wrap every `DataSource` bean in Spring test contexts; primary entry point for Spring Boot users | junit5, report, spring-test + spring-context + junit-jupiter-api (`provided`) |
-| `queryfence-bom` | Version alignment | — |
-
-| `queryfence-integration-tests` | Testcontainers matrix: {Hibernate, MyBatis, JdbcTemplate} × {MySQL, Postgres}; not published | everything, test scope |
+| `queryfence-bom` | Version alignment; lists every published module | — |
+| `queryfence-integration-tests` | Testcontainers matrix: {Hibernate, MyBatis, JdbcTemplate} × {MySQL, Postgres}; **not published** | everything, test scope |
 
 `examples/` holds two standalone Spring Boot projects (MySQL + MyBatis, Postgres + JPA) that run
 with `docker compose up`; they are not part of the reactor.
@@ -54,12 +53,14 @@ with `docker compose up`; they are not part of the reactor.
 3. Suppressions live in the policy (YAML / builder) keyed by `Class#method` and **require a
    reason**. Never add annotations that production code would need to depend on.
 4. Public API is small and explicit. Anything not meant for users goes in an `internal`
-   package. Prefer interfaces + static factories over exposing implementation classes.
+   package, which the published Javadoc excludes. Prefer interfaces + static factories over
+   exposing implementation classes. Every public type and member carries Javadoc: the release
+   build must produce zero Javadoc warnings.
 5. Parse results are cached by SQL string.
 
 ## Rule semantics: `require-predicate`
 
-`docs/DESIGN.md` is the specification (clauses RP-1..RP-13, UW-*, DW-*); the golden corpus is its
+`docs/DESIGN.md` is the specification (clauses RP-1..RP-14, UW-*, DW-*); the golden corpus is its
 executable form. Summary:
 
 A statement passes when **every occurrence** of a protected table — in FROM, JOIN, subqueries
@@ -80,6 +81,9 @@ and INSERT...SELECT sources — is *fenced* by the conditions of its own query b
   Not: preserved side of an outer join's ON, RIGHT/FULL JOIN ON, HAVING.
 - **Derived tables / CTEs:** filters outside do not fence tables inside (no pushdown in v0.1) —
   a known false-positive source, measured in Phase 5.
+- **Primary key only:** an unfenced occurrence whose only value predicate is on the rule's
+  `primaryKey` (default `id`) is `PRIMARY_KEY_LOOKUP`, not `MISSING_PREDICATE`: the fix is
+  `findByIdAndTenantId` or `@TenantId`, not a WHERE clause.
 
 INSERT: the column must be present in the column list. DDL and TRUNCATE are ignored; MERGE on a
 protected table is `UNSUPPORTED_STATEMENT`.
@@ -110,9 +114,10 @@ parameter value checks, custom rule DSL, UI.
   (ansi/mysql/postgres). `CorpusStructureTest` checks ids, clauses, dialects and policies.
 - Every rule change or bug fix adds corpus cases first (test-first). Prefer a violating case for
   every structure that only has a passing one.
-- **Metamorphic test**: `MetamorphicTest` removes each tenant predicate of every passing case from
-  the parsed statement (never from the SQL text) and requires a violation. A passing case that
-  survives the removal is an engine hole.
+- **Metamorphic test**: `MetamorphicTest` weakens every passing case five ways on the parsed
+  statement (never on the SQL text) — remove the predicate, wrap it in `OR 1 = 1`, rebind it to
+  another table, move it into a LEFT JOIN's ON, compare with a column — and requires a violation
+  each time. A passing case that survives one is an engine hole.
 - PIT mutation testing on the rule engine, threshold 88%: `./mvnw -pl queryfence-core -Pmutation
   verify` (CI job "Mutation testing (JDK 21)").
 - Integration tests via Testcontainers: {Hibernate, MyBatis, JdbcTemplate} × {MySQL, Postgres},
@@ -170,9 +175,10 @@ parameter value checks, custom rule DSL, UI.
 
 ## Current status and plan
 
-Phase 0 to Phase 2 are done (design, 197 golden cases, rule engine, metamorphic tests, PIT, SQL
-capture with origin resolution). Phase 3 (current): `queryfence-junit5` fails tests and writes
-reports, `queryfence-spring-test` wraps the `DataSource` beans of a Spring test context.
+Phase 0 to Phase 6 are done: design, 205 golden cases, rule engine, metamorphic tests, PIT, SQL
+capture with origin resolution, the JUnit and Spring modules, the Testcontainers matrix, the
+examples and the documentation site. Phase 7 (current): release 0.1.0 — see `docs/RELEASE.md`.
+Releasing is the maintainer's job; agents never deploy, tag or touch GPG and Central credentials.
 
 1. Phase 0 — design on paper (README, DESIGN.md, 30 cases)
 2. Phase 1 — core + golden corpus (≥150 cases) + PIT

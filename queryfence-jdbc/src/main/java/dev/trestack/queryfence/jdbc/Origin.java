@@ -27,16 +27,29 @@ public record Origin(String className, String methodName, String fileName, int l
 
   private static final Origin UNKNOWN = new Origin(null, null, null, -1);
 
-  /** The origin used when no application frame could be found. */
+  /**
+   * The origin used when no application frame could be found.
+   *
+   * @return an origin whose fields are all unset
+   */
   public static Origin unknown() {
     return UNKNOWN;
   }
 
+  /**
+   * Whether an application frame was found.
+   *
+   * @return {@code true} when the class name is known
+   */
   public boolean isKnown() {
     return className != null;
   }
 
-  /** {@code com.acme.OrderRepository#findByStatus}, the key suppressions are written with. */
+  /**
+   * The key suppressions are written with.
+   *
+   * @return {@code com.acme.OrderRepository#findByStatus}, or {@code unknown}
+   */
   public String classAndMethod() {
     return isKnown() ? className + "#" + methodName : "unknown";
   }

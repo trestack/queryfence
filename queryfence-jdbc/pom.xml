@@ -10,6 +10,7 @@
   <artifactId>queryfence-jdbc</artifactId>
   <name>QueryFence :: jdbc</name>
   <description>Captures every executed SQL statement through a DataSource proxy and resolves its origin.</description>
+  <url>https://github.com/trestack/queryfence</url>
 
   <dependencies>
     <dependency>
